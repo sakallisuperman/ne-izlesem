@@ -15,25 +15,32 @@ Kullanıcının cevapları:
 - İzleme şekli: ${answers.style}
 - Final tercihi: ${answers.ending}
 - Dil tercihi: ${answers.language}
-- Kişi sayısı: ${answers.company}
+- Kaç kişiyle: ${answers.company}
 - Favori türler: ${answers.genres?.join(', ')}
-- Son sevdiği yapıt: ${answers.lastWatched || 'Belirtmedi'}
 
-Bu kişiye 5 film veya dizi öner.`
+Bu kişiye TAM OLARAK 3 film ve 3 dizi öner. Toplamda 6 öneri.`
 
     const completion = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [
         {
           role: 'system',
-          content: `Sen bir film ve dizi uzmanısın. Kullanıcının ruh haline, vaktine ve tercihlerine göre 5 adet film veya dizi önerisi yapacaksın. 
+          content: `Sen bir film ve dizi uzmanısın. Kullanıcıya TAM OLARAK 3 film ve 3 dizi önereceksin, toplamda 6 öneri.
+
 Yanıtını SADECE aşağıdaki JSON formatında ver, başka hiçbir şey yazma, markdown kullanma:
-{"recommendations":[{"title":"Film/Dizi Adı","turkish_title":"Türkçe adı varsa yoksa boş string","type":"film","year":2019,"duration":"2s 15dk","imdb":8.2,"reason":"Bu kullanıcı için neden uygun 2-3 cümle","tags":["#tag1","#tag2","#tag3"]}]}`
+{"recommendations":[{"title":"Orijinal Film/Dizi Adı","turkish_title":"Türkçe adı varsa yoksa boş string","type":"film veya dizi","year":2019,"duration":"2s 15dk veya 3 sezon","imdb":8.2,"reason":"Filmi veya diziyi çarpıcı şekilde tanıtan, izleyiciyi heyecanlandıran 2-3 cümlelik özgün açıklama. Kullanıcının tercihlerine neden uyduğunu belirt ama klişe olma. Sanki bir film eleştirmeni yazıyor gibi yaz.","tags":["#bu filme özgü çarpıcı tag","#konuyla ilgili tag","#duygu veya atmosfer tag"]}]}
+
+ÖNEMLİ KURALLAR:
+- Her film/dizi için hashtag'ler O YAPITA ÖZEL olsun, genel #gerilim #drama gibi şeyler yazma
+- Hashtag örnekleri: #zamandöngüsü #karanlıkgizem #alman yapımı #aile sırrı #adrenalin #beklenmedikson
+- Reason alanı filmi/diziyi satmalı, kullanıcıyı izlemeye ikna etmeli
+- Gerçek var olan yapıtlar öner, uydurma
+- Çeşitlilik sağla`
         },
         { role: 'user', content: userMessage }
       ],
-      temperature: 0.7,
-      max_tokens: 2000,
+      temperature: 0.8,
+      max_tokens: 2500,
     })
 
     const content = completion.choices[0].message.content || ''
