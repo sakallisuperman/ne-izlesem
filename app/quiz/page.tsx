@@ -5,12 +5,11 @@ import { useRouter } from 'next/navigation'
 const questions = [
   { id: 'mood', text: 'Şu an nasıl hissediyorsun?', type: 'single', options: ['Mutlu', 'Melankolik', 'Stresli', 'Heyecanlı', 'Yorgun', 'Meraklı'] },
   { id: 'time', text: 'Bu akşam ne kadar vaktın var?', type: 'single', options: ['1 saatten az', '1-2 saat', '2+ saat', 'Fark etmez'] },
-  { id: 'style', text: 'Nasıl izlemek istiyorsun?', type: 'single', options: ['Derin odaklanarak', 'Yarı uykuda rahatça', 'Heyecanla kenarında oturarak', 'Ağlayarak', 'Gülerek'] },
+  { id: 'style', text: 'Nasıl izlemek istiyorsun?', type: 'single', options: ['Derin odaklanarak', 'Yarı uykuda rahatça', 'Heyecanla', 'Ağlayarak', 'Gülerek'] },
   { id: 'ending', text: 'Son izlemek istediğin şey ne olsun?', type: 'single', options: ['Mutlu son', 'Açık uçlu final', 'Beni şaşırtsın', 'Hüzünlü ama güzel'] },
   { id: 'language', text: 'Hangi dili tercih edersin?', type: 'single', options: ['Türkçe', 'İngilizce', 'Fark etmez', 'Alt yazı olsun yeter'] },
   { id: 'company', text: 'Kaç kişiyle izliyorsun?', type: 'single', options: ['Yalnız', 'Sevgilimle', 'Arkadaşlarla', 'Aileyle'] },
   { id: 'genres', text: 'Favori türün nedir? (En fazla 3)', type: 'multi', options: ['Gerilim', 'Komedi', 'Drama', 'Sci-Fi', 'Suç/Polisiye', 'Romantik', 'Belgesel', 'Animasyon', 'Korku', 'Tarihî'] },
-  { id: 'lastWatched', text: 'Son izlediğin ve sevdiğin bir şey var mı?', type: 'text', options: [] },
 ]
 
 export default function Quiz() {
@@ -18,7 +17,6 @@ export default function Quiz() {
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState<Record<string, any>>({})
   const [selected, setSelected] = useState<string[]>([])
-  const [textVal, setTextVal] = useState('')
 
   const q = questions[current]
   const progress = ((current) / questions.length) * 100
@@ -41,7 +39,6 @@ export default function Quiz() {
     if (current < questions.length - 1) {
       setCurrent(current + 1)
       setSelected([])
-      setTextVal('')
     } else {
       localStorage.setItem('quiz_answers', JSON.stringify(ans))
       router.push('/results')
@@ -50,12 +47,6 @@ export default function Quiz() {
 
   const handleMultiNext = () => {
     const newAnswers = { ...answers, [q.id]: selected }
-    setAnswers(newAnswers)
-    next(newAnswers)
-  }
-
-  const handleTextNext = () => {
-    const newAnswers = { ...answers, [q.id]: textVal }
     setAnswers(newAnswers)
     next(newAnswers)
   }
@@ -98,19 +89,6 @@ export default function Quiz() {
               className="w-full py-4 rounded-full font-semibold transition-all hover:scale-105 disabled:opacity-40"
               style={{background: '#f59e0b', color: '#0a0a0f'}}>
               Devam →
-            </button>
-          </div>
-        )}
-        {q.type === 'text' && (
-          <div className="w-full max-w-md">
-            <input value={textVal} onChange={e => setTextVal(e.target.value)}
-              placeholder="Örn: Breaking Bad, Inception..."
-              className="w-full py-4 px-5 rounded-xl mb-4 text-sm border outline-none"
-              style={{background: '#12121a', color: '#f1f5f9', borderColor: '#ffffff20'}} />
-            <button onClick={handleTextNext}
-              className="w-full py-4 rounded-full font-semibold transition-all hover:scale-105"
-              style={{background: '#f59e0b', color: '#0a0a0f'}}>
-              {textVal ? 'Devam →' : 'Atla →'}
             </button>
           </div>
         )}
