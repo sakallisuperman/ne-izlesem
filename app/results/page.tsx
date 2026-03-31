@@ -39,25 +39,29 @@ export default function Results() {
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return (
-    <main className="min-h-screen flex flex-col items-center justify-center" style={{background: '#0a0a0f'}}>
-      <div className="text-6xl mb-6 animate-bounce">🎬</div>
-      <p className="text-xl font-medium" style={{color: '#f59e0b'}}>Sana özel seçkini hazırlıyoruz...</p>
-      <p className="text-sm mt-3" style={{color: '#94a3b8'}}>Bu birkaç saniye sürebilir</p>
-    </main>
-  )
+  if (loading) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center" style={{background: '#0a0a0f'}}>
+        <div className="text-6xl mb-6 animate-bounce">🎬</div>
+        <p className="text-xl font-medium" style={{color: '#f59e0b'}}>Sana özel seçkini hazırlıyoruz...</p>
+        <p className="text-sm mt-3" style={{color: '#94a3b8'}}>Bu birkaç saniye sürebilir</p>
+      </main>
+    )
+  }
 
-  if (error) return (
-    <main className="min-h-screen flex flex-col items-center justify-center" style={{background: '#0a0a0f'}}>
-      <div className="text-6xl mb-6">😔</div>
-      <p className="text-xl mb-6" style={{color: '#f1f5f9'}}>{error}</p>
-      <button onClick={() => router.push('/quiz')}
-        className="px-8 py-3 rounded-full font-semibold"
-        style={{background: '#f59e0b', color: '#0a0a0f'}}>
-        Tekrar Dene
-      </button>
-    </main>
-  )
+  if (error) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center" style={{background: '#0a0a0f'}}>
+        <div className="text-6xl mb-6">😔</div>
+        <p className="text-xl mb-6" style={{color: '#f1f5f9'}}>{error}</p>
+        <button onClick={() => router.push('/quiz')}
+          className="px-8 py-3 rounded-full font-semibold"
+          style={{background: '#f59e0b', color: '#0a0a0f'}}>
+          Tekrar Dene
+        </button>
+      </main>
+    )
+  }
 
   return (
     <main className="min-h-screen py-12 px-6" style={{background: '#0a0a0f'}}>
@@ -75,7 +79,7 @@ export default function Results() {
                   )}
                 </div>
                 <span className="px-3 py-1 rounded-full text-xs font-semibold ml-3 shrink-0"
-                  style={{background: rec.type === 'film' ? '#f59e0b22', color: '#f59e0b', border: '1px solid #f59e0b44'}}>
+                  style={{background: rec.type === 'film' ? '#f59e0b22' : '#3b82f622', color: rec.type === 'film' ? '#f59e0b' : '#3b82f6', border: `1px solid ${rec.type === 'film' ? '#f59e0b44' : '#3b82f644'}`}}>
                   {rec.type === 'film' ? '🎥 Film' : '📺 Dizi'}
                 </span>
               </div>
