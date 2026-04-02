@@ -3,13 +3,15 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 const questions = [
-  { id: 'mood', text: 'Şu an nasıl hissediyorsun?', type: 'single', options: ['Mutlu', 'Melankolik', 'Stresli', 'Heyecanlı', 'Yorgun', 'Meraklı'] },
-  { id: 'time', text: 'Bu akşam ne kadar vaktın var?', type: 'single', options: ['1 saatten az', '1-2 saat', '2+ saat', 'Fark etmez'] },
-  { id: 'style', text: 'Nasıl izlemek istiyorsun?', type: 'single', options: ['Derin odaklanarak', 'Yarı uykuda rahatça', 'Heyecanla', 'Ağlayarak', 'Gülerek'] },
-  { id: 'ending', text: 'Son izlemek istediğin şey ne olsun?', type: 'single', options: ['Mutlu son', 'Açık uçlu final', 'Beni şaşırtsın', 'Hüzünlü ama güzel'] },
-  { id: 'language', text: 'Hangi dili tercih edersin?', type: 'single', options: ['Türkçe', 'İngilizce', 'Fark etmez', 'Alt yazı olsun yeter'] },
-  { id: 'company', text: 'Kaç kişiyle izliyorsun?', type: 'single', options: ['Yalnız', 'Sevgilimle', 'Arkadaşlarla', 'Aileyle'] },
-  { id: 'genres', text: 'Favori türün nedir? (En fazla 3)', type: 'multi', options: ['Gerilim', 'Komedi', 'Drama', 'Sci-Fi', 'Suç/Polisiye', 'Romantik', 'Belgesel', 'Animasyon', 'Korku', 'Tarihî'] },
+  { id: 'mood', text: 'Şu an nasıl hissediyorsun?', type: 'single', options: ['Mutlu', 'Melankolik', 'Stresli', 'Heyecanlı', 'Yorgun', 'Meraklı', 'Sıkılmış', 'Romantik'] },
+  { id: 'time', text: 'Ne kadar vaktın var?', type: 'single', options: ['1 saatten az', '1-2 saat', '2-3 saat', '3+ saat (Maraton!)'] },
+  { id: 'style', text: 'Nasıl bir deneyim istiyorsun?', type: 'single', options: ['Derin düşündüren', 'Rahatça keyif', 'Adrenalin dolu', 'Ağlatan', 'Kahkaha', 'Görsel şölen'] },
+  { id: 'ending', text: 'Nasıl bir final olsun?', type: 'single', options: ['Mutlu son', 'Açık uçlu', 'Şaşırtan twist', 'Hüzünlü ama güzel', 'Fark etmez'] },
+  { id: 'era', text: 'Hangi dönemden olsun?', type: 'single', options: ['Son 2 yıl', 'Son 5 yıl', 'Son 10 yıl', 'Klasikler (10+ yıl)', 'Fark etmez'] },
+  { id: 'language', text: 'Dil tercihin?', type: 'single', options: ['Türkçe yapım', 'İngilizce', 'Kore / Japon', 'Avrupa yapımı', 'Fark etmez'] },
+  { id: 'company', text: 'Kimlerle izliyorsun?', type: 'single', options: ['Yalnız', 'Sevgilimle', 'Arkadaşlarla', 'Aileyle', 'Çocuklarla'] },
+  { id: 'platform', text: 'Hangi platformları kullanıyorsun?', type: 'multi', maxSelect: 4, options: ['Netflix', 'Amazon Prime', 'Disney+', 'BluTV', 'MUBI', 'Exxen', 'Gain', 'YouTube', 'HBO Max', 'Apple TV+', 'Tabii', 'Fark etmez'] },
+  { id: 'genres', text: 'Favori türlerin? (En fazla 3)', type: 'multi', maxSelect: 3, options: ['Gerilim', 'Komedi', 'Drama', 'Sci-Fi', 'Suç/Polisiye', 'Romantik', 'Belgesel', 'Animasyon', 'Korku', 'Tarihî', 'Fantastik', 'Aksiyon'] },
 ]
 
 export default function Quiz() {
@@ -17,81 +19,160 @@ export default function Quiz() {
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState<Record<string, any>>({})
   const [selected, setSelected] = useState<string[]>([])
+  const [animating, setAnimating] = useState(false)
+  const [direction, setDirection] = useState<'forward' | 'back'>('forward')
 
   const q = questions[current]
-  const progress = ((current) / questions.length) * 100
+  const progress = ((current + 1) / questions.length) * 100
+  const maxSelect = (q as any).maxSelect || 3
+
+  const animateTransition = (nextIndex: number, dir: 'forward' | 'back', newAnswers?: Record<string, any>) => {
+    setDirection(dir)
+    setAnimating(true)
+    setTimeout(() => {
+      setCurrent(nextIndex)
+      const prevAnswer = (newAnswers || answers)[questions[nextIndex]?.id]
+      setSelected(Array.isArray(prevAnswer) ? prevAnswer : [])
+      setAnimating(false)
+    }, 200)
+  }
 
   const handleSingle = (opt: string) => {
     const newAnswers = { ...answers, [q.id]: opt }
     setAnswers(newAnswers)
-    setTimeout(() => next(newAnswers), 300)
-  }
-
-  const handleMulti = (opt: string) => {
-    if (selected.includes(opt)) {
-      setSelected(selected.filter(s => s !== opt))
-    } else if (selected.length < 3) {
-      setSelected([...selected, opt])
+    if (current < questions.length - 1) {
+      setTimeout(() => animateTransition(current + 1, 'forward', newAnswers), 150)
+    } else {
+      localStorage.setItem('quiz_answers', JSON.stringify(newAnswers))
+      router.push('/results')
     }
   }
 
-  const next = (ans = answers) => {
-    if (current < questions.length - 1) {
-      setCurrent(current + 1)
-      setSelected([])
-    } else {
-      localStorage.setItem('quiz_answers', JSON.stringify(ans))
-      router.push('/results')
+  const handleMulti = (opt: string) => {
+    if (opt === 'Fark etmez') {
+      setSelected(selected.includes('Fark etmez') ? [] : ['Fark etmez'])
+      return
+    }
+    const withoutFarketmez = selected.filter(s => s !== 'Fark etmez')
+    if (withoutFarketmez.includes(opt)) {
+      setSelected(withoutFarketmez.filter(s => s !== opt))
+    } else if (withoutFarketmez.length < maxSelect) {
+      setSelected([...withoutFarketmez, opt])
     }
   }
 
   const handleMultiNext = () => {
     const newAnswers = { ...answers, [q.id]: selected }
     setAnswers(newAnswers)
-    next(newAnswers)
+    if (current < questions.length - 1) {
+      animateTransition(current + 1, 'forward', newAnswers)
+    } else {
+      localStorage.setItem('quiz_answers', JSON.stringify(newAnswers))
+      router.push('/results')
+    }
+  }
+
+  const handleBack = () => {
+    if (current > 0) {
+      animateTransition(current - 1, 'back', answers)
+    } else {
+      router.push('/')
+    }
   }
 
   return (
-    <main className="min-h-screen flex flex-col" style={{background: '#0a0a0f'}}>
-      <div className="h-1 transition-all duration-500" style={{width: `${progress}%`, background: '#f59e0b'}} />
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
-        <p className="text-sm mb-8" style={{color: '#94a3b8'}}>{current + 1} / {questions.length}</p>
-        <h2 className="text-2xl md:text-3xl font-bold text-center mb-10" style={{color: '#f1f5f9'}}>
-          {q.text}
-        </h2>
-        {q.type === 'single' && (
-          <div className="grid grid-cols-2 gap-3 w-full max-w-md">
-            {q.options.map(opt => (
-              <button key={opt} onClick={() => handleSingle(opt)}
-                className="py-4 px-4 rounded-xl text-sm font-medium transition-all hover:scale-105 border"
-                style={{background: '#12121a', color: '#f1f5f9', borderColor: '#ffffff20'}}>
-                {opt}
-              </button>
-            ))}
-          </div>
-        )}
-        {q.type === 'multi' && (
-          <div className="w-full max-w-md">
-            <div className="grid grid-cols-2 gap-3 mb-6">
+    <main className="min-h-screen flex flex-col" style={{ background: '#0a0a0f' }}>
+      <div className="w-full h-1" style={{ background: '#ffffff10' }}>
+        <div
+          className="h-full transition-all duration-500 ease-out"
+          style={{ width: `${progress}%`, background: '#f59e0b' }}
+        />
+      </div>
+
+      <div className="flex items-center justify-between px-4 py-4 max-w-lg mx-auto w-full">
+        <button
+          onClick={handleBack}
+          className="flex items-center gap-1.5 text-sm transition-colors hover:opacity-80"
+          style={{ color: '#94a3b8' }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          {current === 0 ? 'Ana Sayfa' : 'Geri'}
+        </button>
+        <span className="text-sm font-medium" style={{ color: '#94a3b8' }}>
+          {current + 1} / {questions.length}
+        </span>
+      </div>
+
+      <div className="flex-1 flex flex-col items-center justify-center px-6 pb-12">
+        <div
+          className={`w-full max-w-md transition-all duration-200 ${
+            animating
+              ? direction === 'forward'
+                ? 'opacity-0 translate-x-8'
+                : 'opacity-0 -translate-x-8'
+              : 'opacity-100 translate-x-0'
+          }`}
+        >
+          <h2
+            className="text-2xl md:text-3xl font-bold text-center mb-10"
+            style={{ color: '#f1f5f9' }}
+          >
+            {q.text}
+          </h2>
+
+          {q.type === 'single' && (
+            <div className="grid grid-cols-2 gap-3">
               {q.options.map(opt => (
-                <button key={opt} onClick={() => handleMulti(opt)}
-                  className="py-4 px-4 rounded-xl text-sm font-medium transition-all border"
+                <button
+                  key={opt}
+                  onClick={() => handleSingle(opt)}
+                  className="py-4 px-4 rounded-xl text-sm font-medium transition-all hover:scale-[1.03] active:scale-95 border"
                   style={{
-                    background: selected.includes(opt) ? '#f59e0b' : '#12121a',
-                    color: selected.includes(opt) ? '#0a0a0f' : '#f1f5f9',
-                    borderColor: selected.includes(opt) ? '#f59e0b' : '#ffffff20'
-                  }}>
+                    background: answers[q.id] === opt ? '#f59e0b' : '#12121a',
+                    color: answers[q.id] === opt ? '#0a0a0f' : '#f1f5f9',
+                    borderColor: answers[q.id] === opt ? '#f59e0b' : '#ffffff20',
+                  }}
+                >
                   {opt}
                 </button>
               ))}
             </div>
-            <button onClick={handleMultiNext} disabled={selected.length === 0}
-              className="w-full py-4 rounded-full font-semibold transition-all hover:scale-105 disabled:opacity-40"
-              style={{background: '#f59e0b', color: '#0a0a0f'}}>
-              Devam →
-            </button>
-          </div>
-        )}
+          )}
+
+          {q.type === 'multi' && (
+            <div>
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                {q.options.map(opt => (
+                  <button
+                    key={opt}
+                    onClick={() => handleMulti(opt)}
+                    className="py-4 px-4 rounded-xl text-sm font-medium transition-all active:scale-95 border"
+                    style={{
+                      background: selected.includes(opt) ? '#f59e0b' : '#12121a',
+                      color: selected.includes(opt) ? '#0a0a0f' : '#f1f5f9',
+                      borderColor: selected.includes(opt) ? '#f59e0b' : '#ffffff20',
+                    }}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+              <p className="text-center text-xs mb-4" style={{ color: '#64748b' }}>
+                {selected.includes('Fark etmez') ? 'Tümü seçildi' : `${selected.length}/${maxSelect} seçildi`}
+              </p>
+              <button
+                onClick={handleMultiNext}
+                disabled={selected.length === 0}
+                className="w-full py-4 rounded-full font-semibold transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-30 disabled:hover:scale-100"
+                style={{ background: '#f59e0b', color: '#0a0a0f' }}
+              >
+                Devam →
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </main>
   )

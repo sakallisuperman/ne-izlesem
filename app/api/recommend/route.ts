@@ -12,13 +12,16 @@ export async function POST(req: NextRequest) {
 Kullanıcının cevapları:
 - Ruh hali: ${answers.mood}
 - Vakit: ${answers.time}
-- İzleme şekli: ${answers.style}
+- İzleme deneyimi: ${answers.style}
 - Final tercihi: ${answers.ending}
+- Dönem tercihi: ${answers.era}
 - Dil tercihi: ${answers.language}
-- Kaç kişiyle: ${answers.company}
-- Favori türler: ${answers.genres?.join(', ')}
+- Kimlerle: ${answers.company}
+- Platformlar: ${Array.isArray(answers.platform) ? answers.platform.join(', ') : answers.platform}
+- Favori türler: ${Array.isArray(answers.genres) ? answers.genres.join(', ') : answers.genres}
 
-Bu kişiye TAM OLARAK 3 film ve 3 dizi öner. Toplamda 6 öneri.`
+Bu kişiye TAM OLARAK 3 film ve 3 dizi öner. Toplamda 6 öneri.
+ÖNEMLİ: Mainstream/popüler yapımların yanında mutlaka az bilinen, keşfedilmeyi bekleyen yapımlar da öner. Herkesin bildiği filmleri değil, kullanıcıyı şaşırtacak öneriler sun.`
 
     const completion = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
@@ -28,18 +31,22 @@ Bu kişiye TAM OLARAK 3 film ve 3 dizi öner. Toplamda 6 öneri.`
           content: `Sen bir film ve dizi uzmanısın. Kullanıcıya TAM OLARAK 3 film ve 3 dizi önereceksin, toplamda 6 öneri.
 
 Yanıtını SADECE aşağıdaki JSON formatında ver, başka hiçbir şey yazma, markdown kullanma:
-{"recommendations":[{"title":"Orijinal Film/Dizi Adı","turkish_title":"Türkçe adı varsa yoksa boş string","type":"film veya dizi","year":2019,"duration":"2s 15dk veya 3 sezon","imdb":8.2,"reason":"Filmi veya diziyi çarpıcı şekilde tanıtan, izleyiciyi heyecanlandıran 2-3 cümlelik özgün açıklama. Kullanıcının tercihlerine neden uyduğunu belirt ama klişe olma. Sanki bir film eleştirmeni yazıyor gibi yaz.","tags":["#bu filme özgü çarpıcı tag","#konuyla ilgili tag","#duygu veya atmosfer tag"]}]}
+{"recommendations":[{"title":"Orijinal Film/Dizi Adı","turkish_title":"Türkçe adı varsa yoksa boş string","type":"film veya dizi","year":2019,"duration":"2s 15dk veya 3 sezon","imdb":8.2,"platform":"Hangi platformda izlenebilir (Netflix, Amazon Prime, vs.)","reason":"Filmi veya diziyi çarpıcı şekilde tanıtan, izleyiciyi heyecanlandıran 2-3 cümlelik özgün açıklama. Kullanıcının tercihlerine neden uyduğunu belirt ama klişe olma. Sanki bir film eleştirmeni yazıyor gibi yaz.","tags":["#bu filme özgü çarpıcı tag","#konuyla ilgili tag","#duygu veya atmosfer tag"]}]}
 
 ÖNEMLİ KURALLAR:
 - Her film/dizi için hashtag'ler O YAPITA ÖZEL olsun, genel #gerilim #drama gibi şeyler yazma
-- Hashtag örnekleri: #zamandöngüsü #karanlıkgizem #alman yapımı #aile sırrı #adrenalin #beklenmedikson
+- Hashtag örnekleri: #zamandöngüsü #karanlıkgizem #almanyapımı #ailesırrı #adrenalin #beklenmedikson
 - Reason alanı filmi/diziyi satmalı, kullanıcıyı izlemeye ikna etmeli
 - Gerçek var olan yapıtlar öner, uydurma
-- Çeşitlilik sağla`
+- Çeşitlilik sağla — en az 2 öneri az bilinen/niş yapım olsun
+- Kullanıcının platform tercihine dikkat et, mümkünse o platformlarda bulunan yapıtları öner
+- HER SEFERINDE FARKLI yapıtlar öner, popüler ve niş yapıtları karıştır
+- Dönem tercihine uy
+- "Fark etmez" seçenekleri kısıtlama yok demek, geniş düşün`
         },
         { role: 'user', content: userMessage }
       ],
-      temperature: 0.8,
+      temperature: 0.9,
       max_tokens: 2500,
     })
 
