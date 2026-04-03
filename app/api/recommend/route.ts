@@ -11,12 +11,12 @@ export async function POST(req: NextRequest) {
     const userMessage = `
 Kullanıcının cevapları:
 - Ruh hali: ${answers.mood}
-- Vakit: ${answers.time}
-- İzleme deneyimi: ${answers.style}
+- Ayıracağı zaman: ${answers.time}
+- İstediği deneyim: ${answers.style}
 - Final tercihi: ${answers.ending}
 - Dönem tercihi: ${answers.era}
 - Dil tercihi: ${answers.language}
-- Kimlerle: ${answers.company}
+- Kimlerle izliyor: ${answers.company}
 - Platformlar: ${Array.isArray(answers.platform) ? answers.platform.join(', ') : answers.platform}
 - Favori türler: ${Array.isArray(answers.genres) ? answers.genres.join(', ') : answers.genres}
 
@@ -41,7 +41,9 @@ Yanıtını SADECE aşağıdaki JSON formatında ver, başka hiçbir şey yazma,
 - Çeşitlilik sağla — en az 2 öneri az bilinen/niş yapım olsun
 - Kullanıcının platform tercihine dikkat et, mümkünse o platformlarda bulunan yapıtları öner
 - HER SEFERINDE FARKLI yapıtlar öner, popüler ve niş yapıtları karıştır
-- Dönem tercihine uy
+- Dönem tercihine uy — yıl aralığına dikkat et
+- Dil tercihi "Türkçe dublaj" ise orijinal dili farketmez ama Türkçe dublajı olan yapımlar öner
+- Dil tercihi "Türkçe altyazı" ise yabancı yapımlar öner
 - "Fark etmez" seçenekleri kısıtlama yok demek, geniş düşün`
         },
         { role: 'user', content: userMessage }
