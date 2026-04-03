@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
 
 interface Recommendation {
   title: string
@@ -45,11 +47,14 @@ async function fetchTMDB(title: string, type: string): Promise<TMDBResult> {
 
 export default function Results() {
   const router = useRouter()
+  const { user, signInWithGoogle } = useAuth()
   const [recommendations, setRecommendations] = useState<Recommendation[]>([])
   const [tmdbData, setTmdbData] = useState<Record<number, TMDBResult>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeTrailer, setActiveTrailer] = useState<string | null>(null)
+  const [savedItems, setSavedItems] = useState<Set<number>>(new Set())
+  const [savingIndex, setSavingIndex] = useState<number | null>(null)
 
   useEffect(() => {
     const answers = JSON.parse(localStorage.getItem('quiz_answers') || '{}')
@@ -77,6 +82,30 @@ export default function Results() {
       .catch(() => setError('Bir sorun oluştu, tekrar dene'))
       .finally(() => setLoading(false))
   }, [])
+
+  const saveToWatchlist = async (rec: Recommendation, index: number) => {
+    if (!user) {
+      signInWithGoogle()
+      return
+    }
+    setSavingIndex(index)
+    const { error } = await supabase.from('watchlist').insert({
+      user_id: user.id,
+      title: rec.title,
+      turkish_title: rec.turkish_title,
+      type: rec.type,
+      year: rec.year,
+      duration: rec.duration,
+      imdb: rec.imdb,
+      platform: rec.platform,
+      reason: rec.reason,
+      tags: rec.tags,
+    })
+    if (!error) {
+      setSavedItems(new Set([...savedItems, index]))
+    }
+    setSavingIndex(null)
+  }
 
   if (loading) {
     return (
@@ -164,13 +193,25 @@ export default function Results() {
                   {rec.platform && <span>📺 {rec.platform}</span>}
                 </div>
                 <p className="text-sm leading-relaxed mb-4" style={{color: '#cbd5e1'}}>{rec.reason}</p>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 mb-4">
                   {rec.tags?.map((tag, j) => (
                     <span key={j} className="px-2 py-1 rounded-full text-xs" style={{background: '#ffffff10', color: '#94a3b8'}}>
                       {tag}
                     </span>
                   ))}
                 </div>
+                <button
+                  onClick={() => saveToWatchlist(rec, i)}
+                  disabled={savedItems.has(i) || savingIndex === i}
+                  className="w-full py-3 rounded-xl text-sm font-semibold transition-all border"
+                  style={{
+                    background: savedItems.has(i) ? '#22c55e22' : '#f59e0b11',
+                    color: savedItems.has(i) ? '#22c55e' : '#f59e0b',
+                    borderColor: savedItems.has(i) ? '#22c55e44' : '#f59e0b33',
+                  }}
+                >
+                  {savedItems.has(i) ? '✓ Kaydedildi' : savingIndex === i ? 'Kaydediliyor...' : user ? '+ Listeme Ekle' : '+ Kaydet (Giriş Yap)'}
+                </button>
               </div>
             </div>
           ))}
