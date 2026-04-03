@@ -1,5 +1,5 @@
 import Groq from 'groq-sdk'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,12 +32,35 @@ KURALLAR:
       ],
       temperature: 0.8,
       max_tokens: 1000,
+      stream: true,
     })
 
-    const content = completion.choices[0].message.content || ''
-    return NextResponse.json({ message: content })
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      async start(controller) {
+        for await (const chunk of completion) {
+          const text = chunk.choices[0]?.delta?.content || ''
+          if (text) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+          }
+        }
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+        controller.close()
+      },
+    })
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    })
   } catch (error) {
     console.error(error)
-    return NextResponse.json({ error: 'Bir sorun oluştu' }, { status: 500 })
+    return new Response(JSON.stringify({ error: 'Bir sorun oluştu' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

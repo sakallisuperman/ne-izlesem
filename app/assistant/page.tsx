@@ -13,16 +13,33 @@ const suggestions = [
   'Türk dizisi önerir misin?',
 ]
 
+function SineAvatar({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
+  const px = size === 'lg' ? 48 : 28
+  return (
+    <svg width={px} height={px} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="24" cy="24" r="24" fill="#1a1a2e"/>
+      <circle cx="24" cy="24" r="22" fill="#12121a" stroke="#f59e0b" strokeWidth="1.5"/>
+      <circle cx="24" cy="16" r="6" fill="#f59e0b" opacity="0.9"/>
+      <rect x="14" y="26" width="20" height="3" rx="1.5" fill="#f59e0b" opacity="0.7"/>
+      <rect x="16" y="31" width="16" height="2" rx="1" fill="#f59e0b" opacity="0.5"/>
+      <rect x="18" y="35" width="12" height="2" rx="1" fill="#f59e0b" opacity="0.3"/>
+      <circle cx="21" cy="15" r="1" fill="#12121a"/>
+      <circle cx="27" cy="15" r="1" fill="#12121a"/>
+      <path d="M22 18.5 Q24 20 26 18.5" stroke="#12121a" strokeWidth="0.8" fill="none" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
 export default function Assistant() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [streamingText, setStreamingText] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, streamingText])
 
   const sendMessage = async (text?: string) => {
     const messageText = text || input.trim()
@@ -33,6 +50,7 @@ export default function Assistant() {
     setMessages(newMessages)
     setInput('')
     setLoading(true)
+    setStreamingText('')
 
     try {
       const res = await fetch('/api/chat', {
@@ -40,9 +58,35 @@ export default function Assistant() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: newMessages }),
       })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      setMessages([...newMessages, { role: 'assistant', content: data.message }])
+
+      if (!res.ok) throw new Error('API hatası')
+
+      const reader = res.body?.getReader()
+      const decoder = new TextDecoder()
+      let fullText = ''
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value)
+          const lines = chunk.split('\n')
+
+          for (const line of lines) {
+            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+              try {
+                const data = JSON.parse(line.slice(6))
+                fullText += data.text
+                setStreamingText(fullText)
+              } catch {}
+            }
+          }
+        }
+      }
+
+      setMessages([...newMessages, { role: 'assistant', content: fullText }])
+      setStreamingText('')
     } catch {
       setMessages([...newMessages, { role: 'assistant', content: 'Bir sorun oluştu, tekrar dener misin? 😔' }])
     } finally {
@@ -62,13 +106,12 @@ export default function Assistant() {
       {/* Header */}
       <div className="px-4 py-4 border-b" style={{ borderColor: '#ffffff15' }}>
         <div className="max-w-2xl mx-auto flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
-            style={{ background: '#f59e0b22', color: '#f59e0b' }}>
-            🤖
-          </div>
+          <SineAvatar size="sm" />
           <div>
-            <h1 className="font-bold" style={{ color: '#f1f5f9' }}>Sine</h1>
-            <p className="text-xs" style={{ color: '#64748b' }}>Film & Dizi Asistanı</p>
+            <h1 className="font-bold text-sm" style={{ color: '#f1f5f9' }}>Sine</h1>
+            <p className="text-xs" style={{ color: loading ? '#f59e0b' : '#64748b' }}>
+              {loading ? 'yazıyor...' : 'Film & Dizi Asistanı'}
+            </p>
           </div>
         </div>
       </div>
@@ -76,10 +119,10 @@ export default function Assistant() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6 pb-36">
         <div className="max-w-2xl mx-auto">
-          {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16">
-              <div className="text-5xl mb-4">🎬</div>
-              <h2 className="text-lg font-bold mb-2" style={{ color: '#f1f5f9' }}>Merhaba! Ben Sine</h2>
+          {messages.length === 0 && !streamingText && (
+            <div className="flex flex-col items-center justify-center py-12">
+              <SineAvatar size="lg" />
+              <h2 className="text-lg font-bold mb-2 mt-4" style={{ color: '#f1f5f9' }}>Merhaba! Ben Sine 👋</h2>
               <p className="text-center text-sm mb-8 max-w-sm" style={{ color: '#94a3b8' }}>
                 Film ve dizi konusunda sana yardımcı olabilirim. Ne izlemek istediğini anlat, sana öneriler sunayım!
               </p>
@@ -101,9 +144,8 @@ export default function Assistant() {
           {messages.map((msg, i) => (
             <div key={i} className={`flex mb-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {msg.role === 'assistant' && (
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs mr-2 mt-1 shrink-0"
-                  style={{ background: '#f59e0b22', color: '#f59e0b' }}>
-                  🤖
+                <div className="mr-2 mt-1 shrink-0">
+                  <SineAvatar size="sm" />
                 </div>
               )}
               <div
@@ -125,11 +167,32 @@ export default function Assistant() {
             </div>
           ))}
 
-          {loading && (
+          {/* Streaming message */}
+          {streamingText && (
             <div className="flex mb-4 justify-start">
-              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs mr-2 mt-1 shrink-0"
-                style={{ background: '#f59e0b22', color: '#f59e0b' }}>
-                🤖
+              <div className="mr-2 mt-1 shrink-0">
+                <SineAvatar size="sm" />
+              </div>
+              <div
+                className="max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed"
+                style={{ background: '#12121a', color: '#f1f5f9', borderBottomLeftRadius: '4px' }}
+              >
+                {streamingText.split('\n').map((line, j) => (
+                  <span key={j}>
+                    {line}
+                    {j < streamingText.split('\n').length - 1 && <br />}
+                  </span>
+                ))}
+                <span className="inline-block w-1.5 h-4 ml-0.5 animate-pulse" style={{ background: '#f59e0b' }} />
+              </div>
+            </div>
+          )}
+
+          {/* Loading dots (before streaming starts) */}
+          {loading && !streamingText && (
+            <div className="flex mb-4 justify-start">
+              <div className="mr-2 mt-1 shrink-0">
+                <SineAvatar size="sm" />
               </div>
               <div className="px-4 py-3 rounded-2xl text-sm" style={{ background: '#12121a', borderBottomLeftRadius: '4px' }}>
                 <div className="flex gap-1">
@@ -149,13 +212,13 @@ export default function Assistant() {
       <div className="fixed bottom-16 left-0 right-0 px-4 py-3 border-t" style={{ background: '#0a0a0f', borderColor: '#ffffff15' }}>
         <div className="max-w-2xl mx-auto flex gap-2">
           <input
-            ref={inputRef}
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Film veya dizi hakkında sor..."
-            className="flex-1 px-4 py-3 rounded-xl text-sm outline-none border"
+            disabled={loading}
+            className="flex-1 px-4 py-3 rounded-xl text-sm outline-none border disabled:opacity-50"
             style={{ background: '#12121a', color: '#f1f5f9', borderColor: '#ffffff20' }}
           />
           <button
