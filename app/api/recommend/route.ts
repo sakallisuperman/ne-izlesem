@@ -2,10 +2,9 @@ import Groq from 'groq-sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
-
 export async function POST(req: NextRequest) {
   try {
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
     const { answers } = await req.json()
 
     const userMessage = `

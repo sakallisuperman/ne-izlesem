@@ -102,7 +102,7 @@ export default function Results() {
       tags: rec.tags,
     })
     if (!error) {
-      setSavedItems(new Set([...savedItems, index]))
+      setSavedItems(prev => { const next = new Set(Array.from(prev)); next.add(index); return next; })
     }
     setSavingIndex(null)
   }

@@ -1,8 +1,11 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
   "/api/recommend/route": "app/api/recommend/route.js",
+  "/assistant/page": "app/assistant/page.js",
+  "/history/page": "app/history/page.js",
   "/favicon.ico/route": "app/favicon.ico/route.js",
   "/page": "app/page.js",
-  "/results/page": "app/results/page.js",
-  "/quiz/page": "app/quiz/page.js"
+  "/quiz/page": "app/quiz/page.js",
+  "/profile/page": "app/profile/page.js",
+  "/results/page": "app/results/page.js"
 }
