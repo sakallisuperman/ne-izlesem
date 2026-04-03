@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 const questions = [
-  { id: 'mood', text: 'Şu an kendini nasıl hissediyorsun?', type: 'single', options: ['Enerjik', 'Neşeli', 'Heyecanlı', 'Meraklı', 'Sakin', 'Duygusal', 'Yorgun', 'Gergin', 'Canı sıkkın', 'Romantik'] },
+  { id: 'mood', text: 'Şu an kendini nasıl hissediyorsun?', type: 'single', options: ['Neşeli', 'Heyecanlı', 'Meraklı', 'Sakin', 'Duygusal', 'Yorgun', 'Canı sıkkın', 'Stresli'] },
   { id: 'time', text: 'Ne kadar zaman ayırmak istiyorsun?', type: 'single', options: ['1 saatten az', '1-2 saat', '2-3 saat', '3+ saat (Maraton!)'] },
   { id: 'style', text: 'Nasıl bir deneyim arıyorsun?', type: 'single', options: ['Kafamı dağıtmak istiyorum', 'Kendimi kaptırmak istiyorum', 'Düşünmek istiyorum', 'Heyecan yaşamak istiyorum', 'Gülmek istiyorum', 'Ağlamak istiyorum'] },
   { id: 'ending', text: 'Nasıl bir final olsun?', type: 'single', options: ['Mutlu son', 'Açık uçlu', 'Ters köşe', 'Hüzünlü ama güzel', 'Fark etmez'] },
