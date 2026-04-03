@@ -43,33 +43,33 @@ export default function Home() {
             Takip Et
           </a>
           <Link href="/profile" className="text-xs font-medium transition-opacity hover:opacity-80" style={{ color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)', padding: '5px 14px', borderRadius: '20px', background: 'rgba(245,158,11,0.08)' }}>
-            Giris Yap
+            Giriş Yap
           </Link>
         </div>
-        <div className={loaded ? 'text-center mt-8 mb-8 transition-all duration-700 opacity-100 translate-y-0' : 'text-center mt-8 mb-8 transition-all duration-700 opacity-0 translate-y-4'}>
+        <div className={loaded ? 'text-center mt-6 mb-6 transition-all duration-700 opacity-100 translate-y-0' : 'text-center mt-6 mb-6 transition-all duration-700 opacity-0 translate-y-4'}>
           <div className="flex items-center justify-center gap-3 mb-3">
-            <span className="text-4xl">🎬</span>
-            <h1 className="text-4xl font-bold" style={{ color: '#f59e0b', letterSpacing: '-1px' }}>Ne Izlesem?</h1>
+            <span className="text-5xl">🎬</span>
+            <h1 className="text-5xl font-bold" style={{ color: '#f59e0b', letterSpacing: '-1px' }}>Ne İzlesem?</h1>
           </div>
-          <p className="text-base" style={{ color: '#94a3b8', lineHeight: 1.6 }}>Ruh haline gore sana ozel<br /><span style={{ color: '#cbd5e1', fontWeight: 500 }}>film ve dizi onerileri</span></p>
+          <p className="text-xl" style={{ color: '#94a3b8', lineHeight: 1.6 }}>Ruh haline göre sana özel<br /><span style={{ color: '#cbd5e1', fontWeight: 500 }}>film ve dizi önerileri</span></p>
         </div>
-        <div className={loaded ? 'mb-8 transition-all duration-700 delay-200 opacity-100 translate-y-0' : 'mb-8 transition-all duration-700 delay-200 opacity-0 translate-y-4'}>
-          <p className="text-center text-xs font-semibold mb-3 tracking-widest" style={{ color: '#f59e0b' }}>GUNUN SECIMI</p>
+        <div className={loaded ? 'mb-6 transition-all duration-700 delay-200 opacity-100 translate-y-0' : 'mb-6 transition-all duration-700 delay-200 opacity-0 translate-y-4'}>
+          <p className="text-center text-xs font-semibold mb-3 tracking-widest" style={{ color: '#f59e0b' }}>✨ GÜNÜN SEÇİMİ</p>
           <div className="flex gap-3 justify-center">
             <DailyCard pick={daily.film} type="film" />
             <DailyCard pick={daily.dizi} type="dizi" />
           </div>
         </div>
         <div className={loaded ? 'text-center mb-8 transition-all duration-700 delay-300 opacity-100 translate-y-0' : 'text-center mb-8 transition-all duration-700 delay-300 opacity-0 translate-y-4'}>
-          <Link href="/quiz"><button className="px-12 py-4 rounded-full text-lg font-semibold transition-all hover:scale-105 active:scale-95" style={{ background: '#f59e0b', color: '#0a0a0f' }}>Basla →</button></Link>
-          <p className="text-xs mt-3" style={{ color: '#475569' }}>veya <Link href="/assistant" style={{ color: '#f59e0b', fontWeight: 500 }}>asistanla konusarak</Link> oneri al</p>
+          <Link href="/quiz"><button className="px-14 py-5 rounded-full text-xl font-semibold transition-all hover:scale-105 active:scale-95" style={{ background: '#f59e0b', color: '#0a0a0f' }}>Başla →</button></Link>
+          <p className="text-sm mt-3" style={{ color: '#475569' }}>veya <Link href="/assistant" style={{ color: '#f59e0b', fontWeight: 500 }}>asistanla konuşarak</Link> öneri al</p>
         </div>
         <div className={loaded ? 'flex justify-center gap-6 mb-6 transition-all duration-700 delay-500 opacity-100 translate-y-0' : 'flex justify-center gap-6 mb-6 transition-all duration-700 delay-500 opacity-0 translate-y-4'}>
-          <div className="text-center"><p className="text-lg font-bold" style={{ color: '#f59e0b' }}>{stats.recommendations}</p><p className="text-[10px]" style={{ color: '#64748b' }}>oneri yapildi</p></div>
+          <div className="text-center"><p className="text-lg font-bold" style={{ color: '#f59e0b' }}>{stats.recommendations}</p><p className="text-[10px]" style={{ color: '#64748b' }}>öneri yapıldı</p></div>
           <div style={{ width: '1px', background: 'rgba(255,255,255,0.08)', alignSelf: 'stretch' }} />
-          <div className="text-center"><p className="text-lg font-bold" style={{ color: '#f59e0b' }}>{stats.users}</p><p className="text-[10px]" style={{ color: '#64748b' }}>mutlu kullanici</p></div>
+          <div className="text-center"><p className="text-lg font-bold" style={{ color: '#f59e0b' }}>{stats.users}</p><p className="text-[10px]" style={{ color: '#64748b' }}>mutlu kullanıcı</p></div>
           <div style={{ width: '1px', background: 'rgba(255,255,255,0.08)', alignSelf: 'stretch' }} />
-          <div className="text-center"><p className="text-lg font-bold" style={{ color: '#f59e0b' }}>{stats.titles}</p><p className="text-[10px]" style={{ color: '#64748b' }}>film ve dizi</p></div>
+          <div className="text-center"><p className="text-lg font-bold" style={{ color: '#f59e0b' }}>{stats.titles}</p><p className="text-[10px]" style={{ color: '#64748b' }}>film & dizi</p></div>
         </div>
         <div className="pb-20" />
       </div>
@@ -80,8 +80,8 @@ export default function Home() {
 function DailyCard({ pick, type }: { pick: DailyPick | null; type: string }) {
   const isFilm = type === 'film'
   return (
-    <div className="rounded-xl overflow-hidden border" style={{ width: '152px', background: '#12121a', borderColor: 'rgba(255,255,255,0.06)' }}>
-      <div className="relative" style={{ height: '110px' }}>
+    <div className="rounded-xl overflow-hidden border" style={{ width: '140px', background: '#12121a', borderColor: 'rgba(255,255,255,0.06)' }}>
+      <div className="relative" style={{ height: '85px' }}>
         {pick?.poster ? (
           <img src={pick.poster} alt={pick.title} className="w-full h-full object-cover" />
         ) : (
@@ -90,9 +90,9 @@ function DailyCard({ pick, type }: { pick: DailyPick | null; type: string }) {
         <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, transparent 40%, #12121a)' }} />
         <span className="absolute top-2 left-2 text-[9px] font-semibold px-2 py-0.5 rounded-full" style={{ background: isFilm ? 'rgba(245,158,11,0.2)' : 'rgba(59,130,246,0.2)', color: isFilm ? '#f59e0b' : '#60a5fa' }}>{isFilm ? 'Film' : 'Dizi'}</span>
       </div>
-      <div className="px-3 py-2.5">
-        <p className="text-xs font-semibold truncate" style={{ color: '#f1f5f9' }}>{pick?.turkish_title || pick?.title || 'Yukleniyor...'}</p>
-        <p className="text-[10px] mt-0.5" style={{ color: '#64748b' }}>{pick ? pick.year + ' - ' + pick.imdb : '...'}</p>
+      <div className="px-3 py-2">
+        <p className="text-xs font-semibold truncate" style={{ color: '#f1f5f9' }}>{pick?.turkish_title || pick?.title || 'Yükleniyor...'}</p>
+        <p className="text-[10px] mt-0.5" style={{ color: '#64748b' }}>{pick ? pick.year + ' • ⭐ ' + pick.imdb : '...'}</p>
       </div>
     </div>
   )
