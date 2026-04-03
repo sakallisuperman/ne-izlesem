@@ -78,7 +78,7 @@ export default function Assistant() {
               try {
                 const data = JSON.parse(line.slice(6))
                 fullText += data.text
-                await new Promise(r => setTimeout(r, 30))
+                await new Promise(r => setTimeout(r, 70))
                 setStreamingText(fullText)
               } catch {}
             }
