@@ -118,7 +118,7 @@ export default function Assistant() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 pb-36">
+      <div className="flex-1 overflow-y-auto px-4 py-6 pb-24">
         <div className="max-w-2xl mx-auto">
           {messages.length === 0 && !streamingText && (
             <div className="flex flex-col items-center justify-center py-12">
@@ -210,7 +210,7 @@ export default function Assistant() {
       </div>
 
       {/* Input */}
-      <div className="fixed bottom-16 left-0 right-0 px-4 py-3 border-t" style={{ background: '#0a0a0f', borderColor: '#ffffff15' }}>
+      <div className="fixed bottom-0 left-0 right-0 px-4 py-3 border-t" style={{ background: '#0a0a0f', borderColor: '#ffffff15' }}>
         <div className="max-w-2xl mx-auto flex gap-2">
           <input
             type="text"
