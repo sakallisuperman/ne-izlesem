@@ -50,7 +50,7 @@ Yanıtını SADECE aşağıdaki JSON formatında ver, başka hiçbir şey yazma,
 
 export async function POST(req: NextRequest) {
   try {
-    const { answers } = await req.json()
+    const { answers, excludeTitles = [] } = await req.json()
     const userMessage = `Kullanıcının cevapları:
 - Ruh hali: ${answers.mood}
 - Ayıracağı zaman: ${answers.time}
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
 - Platformlar: ${Array.isArray(answers.platform) ? answers.platform.join(', ') : answers.platform}
 - Favori türler: ${Array.isArray(answers.genres) ? answers.genres.join(', ') : answers.genres}
 
-Bu kişiye TAM OLARAK 3 film ve 3 dizi öner. Toplamda 6 öneri.
+${excludeTitles.length > 0 ? "\nDaha önce izlenen ve ÖNERİLMEMESİ gereken yapımlar: " + excludeTitles.join(", ") + "\n" : ""}Bu kişiye TAM OLARAK 3 film ve 3 dizi öner. Toplamda 6 öneri.
 ÖNEMLİ: Mainstream/popüler yapımların yanında mutlaka az bilinen yapımlar da öner.`
 
     const cleaned = await callGroq(userMessage)

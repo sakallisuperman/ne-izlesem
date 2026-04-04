@@ -60,6 +60,20 @@ export default function Profile() {
           <p className="text-sm" style={{ color: '#94a3b8' }}>{user.email}</p>
         </div>
 
+        <div className="grid grid-cols-3 gap-3 mb-8">
+          <div className="text-center p-3 rounded-xl" style={{ background: '#12121a' }}>
+            <p className="text-lg font-bold" style={{ color: '#f59e0b' }}>0</p>
+            <p className="text-[10px]" style={{ color: '#64748b' }}>İzleme Listem</p>
+          </div>
+          <div className="text-center p-3 rounded-xl" style={{ background: '#12121a' }}>
+            <p className="text-lg font-bold" style={{ color: '#22c55e' }}>0</p>
+            <p className="text-[10px]" style={{ color: '#64748b' }}>İzlediklerim</p>
+          </div>
+          <div className="text-center p-3 rounded-xl" style={{ background: '#12121a' }}>
+            <p className="text-lg font-bold" style={{ color: '#3b82f6' }}>0</p>
+            <p className="text-[10px]" style={{ color: '#64748b' }}>Quiz</p>
+          </div>
+        </div>
         <div className="flex flex-col gap-3">
           <button
             onClick={signOut}

@@ -58,7 +58,7 @@ export default function History() {
   }
 
   const updateStatus = async (id: string, status: string) => {
-    await supabase.from('watchlist').update({ status }).eq('id', id)
+    undefined
     setItems(items.map(i => i.id === id ? { ...i, status } : i))
   }
 

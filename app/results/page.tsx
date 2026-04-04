@@ -63,7 +63,7 @@ export default function Results() {
     fetch('/api/recommend', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ answers }),
+      body: JSON.stringify({ answers, excludeTitles: JSON.parse(localStorage.getItem('watched_titles') || '[]') }),
     })
       .then(r => r.json())
       .then(async data => {
