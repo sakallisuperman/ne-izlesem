@@ -36,7 +36,7 @@ export default function BottomNav() {
   const { user } = useAuth()
 
   // Quiz ve results sayfalarında gizle
-  if (pathname === '/quiz' || pathname === '/results' || pathname === '/assistant') return null
+  if (pathname === '/quiz' || pathname === '/results' ) return null
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t" style={{ background: '#0a0a0f', borderColor: '#ffffff15' }}>
