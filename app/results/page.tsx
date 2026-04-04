@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
+import StarRating from '@/components/StarRating'
 
 interface Recommendation {
   title: string
@@ -183,6 +184,10 @@ export default function Results() {
                       {tag}
                     </span>
                   ))}
+                </div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs" style={{ color: '#64748b' }}>Puanla:</span>
+                  <StarRating onRate={(r) => console.log(rec.title, r)} />
                 </div>
                 <button
                   onClick={() => saveToWatchlist(rec, i)}

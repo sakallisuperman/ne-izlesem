@@ -24,6 +24,7 @@ interface PickDetail {
 export default function Home() {
   const [stats, setStats] = useState<Stats>({ recommendations: '14.8K+', users: '3.2K+', titles: '850+' })
   const [loaded, setLoaded] = useState(false)
+  const [posters, setPosters] = useState<string[]>([])
   const { user } = useAuth()
   const [popup, setPopup] = useState<PickDetail | null>(null)
 
@@ -34,6 +35,14 @@ export default function Home() {
 
   useEffect(() => {
     setLoaded(true)
+    fetch('/api/daily-picks').then(r => r.json()).then(async () => {
+      try {
+        const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
+        const res = await fetch(`https://api.themoviedb.org/3/movie/popular?api_key=${apiKey}&language=tr-TR&page=1`)
+        const data = await res.json()
+        setPosters((data.results || []).slice(0, 20).map((m: any) => m.poster_path ? `https://image.tmdb.org/t/p/w200${m.poster_path}` : '').filter(Boolean))
+      } catch {}
+    }).catch(() => {})
     fetch('/api/stats').then(r => r.json()).then(setStats).catch(() => {})
   }, [])
 
@@ -73,9 +82,11 @@ export default function Home() {
   return (
     <main className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: '#0a0a0f' }}>
       <div className="absolute inset-0 grid grid-cols-4 gap-1 p-1 opacity-[0.04]">
-        {Array.from({ length: 20 }).map((_, i) => (
+        {{posters.length > 0 ? posters.map((p, i) => (
+          <img key={i} src={p} alt="" className="rounded-lg w-full h-full object-cover" />
+        )) : Array.from({ length: 20 }).map((_, i) => (
           <div key={i} className="rounded-lg" style={{ background: 'linear-gradient(135deg, #1a1a2e, #16213e)' }} />
-        ))}
+        ))}}
       </div>
       <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(10,10,15,0.3) 0%, rgba(10,10,15,0.85) 35%, #0a0a0f 60%)' }} />
 
