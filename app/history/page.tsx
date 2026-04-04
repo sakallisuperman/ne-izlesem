@@ -98,8 +98,8 @@ export default function History() {
         <div className="flex gap-2 mb-6">
           {[
             { key: 'all', label: 'Tümü' },
-            { key: 'saved', label: 'İzlemek İstiyorum' },
-            { key: 'watched', label: 'İzledim' },
+            { key: 'saved', label: 'İzleme Listem' },
+            { key: 'watched', label: 'İzlediklerim' },
           ].map(f => (
             <button
               key={f.key}
