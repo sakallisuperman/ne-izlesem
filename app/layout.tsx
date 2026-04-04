@@ -19,6 +19,8 @@ export const metadata: Metadata = {
   title: "Ne İzlesem? | Ruh Haline Göre Film ve Dizi Önerileri",
   description:
     "Birkaç soruya cevap ver, sana özel film ve dizi önerileri alalım. Yapay zeka destekli kişiselleştirilmiş öneri sistemi.",
+  themeColor: "#f59e0b",
+  viewport: { width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false },
   keywords: [
     "film önerisi",
     "dizi önerisi",
@@ -27,6 +29,8 @@ export const metadata: Metadata = {
     "dizi tavsiyesi",
     "yapay zeka öneri",
   ],
+  manifest: "/manifest.json",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Ne İzlesem?" },
   openGraph: {
     title: "Ne İzlesem? 🎬",
     description: "Ruh haline göre sana özel film ve dizi önerileri",
