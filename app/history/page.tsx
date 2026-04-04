@@ -98,8 +98,8 @@ export default function History() {
         <div className="flex gap-2 mb-6">
           {[
             { key: 'all', label: 'Tümü' },
-            { key: 'saved', label: 'Kaydedilenler' },
-            { key: 'watched', label: 'İzlenenler' },
+            { key: 'saved', label: 'İzlemek İstiyorum' },
+            { key: 'watched', label: 'İzledim' },
           ].map(f => (
             <button
               key={f.key}
@@ -118,7 +118,7 @@ export default function History() {
         {filtered.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-4xl mb-4">🎬</div>
-            <p style={{ color: '#94a3b8' }}>Henüz kayıtlı önerin yok.</p>
+            <p style={{ color: '#94a3b8' }}>undefined</p>
             <button
               onClick={() => router.push('/quiz')}
               className="mt-4 px-6 py-2 rounded-full text-sm font-semibold"
