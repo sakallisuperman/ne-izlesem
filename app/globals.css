@@ -25,3 +25,9 @@ body {
     text-wrap: balance;
   }
 }
+
+@keyframes bgScroll {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(25%); }
+  100% { transform: translateY(0); }
+}

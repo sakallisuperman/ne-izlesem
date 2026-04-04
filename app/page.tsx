@@ -38,9 +38,10 @@ export default function Home() {
     fetch('/api/daily-picks').then(r => r.json()).then(async () => {
       try {
         const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
-        const res = await fetch(`https://api.themoviedb.org/3/movie/popular?api_key=${apiKey}&language=tr-TR&page=1`)
-        const data = await res.json()
-        setPosters((data.results || []).slice(0, 20).map((m: any) => m.poster_path ? `https://image.tmdb.org/t/p/w200${m.poster_path}` : '').filter(Boolean))
+        const kultIds = [603, 550, 238, 120, 13, 155, 680, 27205, 78, 11, 424, 539, 278, 510, 497]
+        const results = await Promise.all(kultIds.map(id => fetch(`https://api.themoviedb.org/3/movie/${id}?api_key=${apiKey}&language=tr-TR`).then(r => r.json()).catch(() => null)))
+        const data = { results: results.filter(Boolean) }
+        setPosters((data.results || []).map((m: any) => m.poster_path ? `https://image.tmdb.org/t/p/w300${m.poster_path}` : '').filter(Boolean))
       } catch {}
     }).catch(() => {})
     fetch('/api/stats').then(r => r.json()).then(setStats).catch(() => {})
@@ -81,7 +82,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: '#0a0a0f' }}>
-      <div className="absolute inset-0 grid grid-cols-4 gap-1 p-1 opacity-[0.04]">
+      <div className="absolute inset-0 grid grid-cols-4 gap-1 p-1 opacity-[0.12]" style={{ animation: 'bgScroll 60s linear infinite', height: '200%', marginTop: '-50%' }}>
         {posters.length > 0 ? posters.map((p, i) => (
           <img key={i} src={p} alt="" className="rounded-lg w-full h-full object-cover" />
         )) : Array.from({ length: 20 }).map((_, i) => (
