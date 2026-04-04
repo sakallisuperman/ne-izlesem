@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface Stats {
   recommendations: string
@@ -11,6 +12,7 @@ interface Stats {
 export default function Home() {
   const [stats, setStats] = useState<Stats>({ recommendations: '14.8K+', users: '3.2K+', titles: '850+' })
   const [loaded, setLoaded] = useState(false)
+  const { user } = useAuth()
 
   useEffect(() => {
     setLoaded(true)
@@ -32,7 +34,7 @@ export default function Home() {
             Takip Et
           </a>
           <Link href="/profile" className="text-xs font-medium transition-opacity hover:opacity-80" style={{ color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)', padding: '5px 14px', borderRadius: '20px', background: 'rgba(245,158,11,0.08)' }}>
-            Giriş Yap
+            {user ? (user.user_metadata?.full_name || user.email || "Profil").split(" ")[0] : "Giriş Yap"}
           </Link>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center" style={{ marginTop: '-20px' }}>
