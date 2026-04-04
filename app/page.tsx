@@ -82,11 +82,11 @@ export default function Home() {
   return (
     <main className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: '#0a0a0f' }}>
       <div className="absolute inset-0 grid grid-cols-4 gap-1 p-1 opacity-[0.04]">
-        {{posters.length > 0 ? posters.map((p, i) => (
+        {posters.length > 0 ? posters.map((p, i) => (
           <img key={i} src={p} alt="" className="rounded-lg w-full h-full object-cover" />
         )) : Array.from({ length: 20 }).map((_, i) => (
           <div key={i} className="rounded-lg" style={{ background: 'linear-gradient(135deg, #1a1a2e, #16213e)' }} />
-        ))}}
+        ))}
       </div>
       <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(10,10,15,0.3) 0%, rgba(10,10,15,0.85) 35%, #0a0a0f 60%)' }} />
 
