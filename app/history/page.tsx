@@ -158,7 +158,7 @@ export default function History() {
                       className="px-3 py-1.5 rounded-lg text-xs font-medium"
                       style={{ background: '#22c55e22', color: '#22c55e' }}
                     >
-                      ✓ İzledim
+                      Bunu İzledim
                     </button>
                   )}
                   {item.status === 'watched' && (
