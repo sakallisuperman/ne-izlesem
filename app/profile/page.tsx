@@ -1,8 +1,42 @@
 'use client'
+import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
+
+interface Stats {
+  watchlist: number
+  watched: number
+  quiz: number
+}
 
 export default function Profile() {
   const { user, loading, signInWithGoogle, signOut } = useAuth()
+  const [stats, setStats] = useState<Stats>({ watchlist: 0, watched: 0, quiz: 0 })
+  const [statsLoading, setStatsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!user) return
+    setStatsLoading(true)
+
+    Promise.all([
+      supabase
+        .from('watchlist')
+        .select('status')
+        .eq('user_id', user.id),
+      supabase
+        .from('sessions')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id),
+    ]).then(([watchlistRes, sessionsRes]) => {
+      const items = watchlistRes.data || []
+      setStats({
+        watchlist: items.filter(i => i.status === 'saved').length,
+        watched: items.filter(i => i.status === 'watched').length,
+        quiz: sessionsRes.count || 0,
+      })
+      setStatsLoading(false)
+    })
+  }, [user])
 
   if (loading) {
     return (
@@ -62,18 +96,25 @@ export default function Profile() {
 
         <div className="grid grid-cols-3 gap-3 mb-8">
           <div className="text-center p-3 rounded-xl" style={{ background: '#12121a' }}>
-            <p className="text-lg font-bold" style={{ color: '#f59e0b' }}>0</p>
+            <p className="text-lg font-bold" style={{ color: '#f59e0b' }}>
+              {statsLoading ? '—' : stats.watchlist}
+            </p>
             <p className="text-[10px]" style={{ color: '#64748b' }}>İzleme Listem</p>
           </div>
           <div className="text-center p-3 rounded-xl" style={{ background: '#12121a' }}>
-            <p className="text-lg font-bold" style={{ color: '#22c55e' }}>0</p>
+            <p className="text-lg font-bold" style={{ color: '#22c55e' }}>
+              {statsLoading ? '—' : stats.watched}
+            </p>
             <p className="text-[10px]" style={{ color: '#64748b' }}>İzlediklerim</p>
           </div>
           <div className="text-center p-3 rounded-xl" style={{ background: '#12121a' }}>
-            <p className="text-lg font-bold" style={{ color: '#3b82f6' }}>0</p>
+            <p className="text-lg font-bold" style={{ color: '#3b82f6' }}>
+              {statsLoading ? '—' : stats.quiz}
+            </p>
             <p className="text-[10px]" style={{ color: '#64748b' }}>Quiz</p>
           </div>
         </div>
+
         <div className="flex flex-col gap-3">
           <button
             onClick={signOut}
