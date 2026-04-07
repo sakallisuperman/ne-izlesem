@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -15,12 +15,18 @@ const geistMono = localFont({
   weight: "100 900",
 });
 
+export const viewport: Viewport = {
+  themeColor: "#f59e0b",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 export const metadata: Metadata = {
   title: "Ne İzlesem? | Ruh Haline Göre Film ve Dizi Önerileri",
   description:
     "Birkaç soruya cevap ver, sana özel film ve dizi önerileri alalım. Yapay zeka destekli kişiselleştirilmiş öneri sistemi.",
-  themeColor: "#f59e0b",
-  viewport: { width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false },
   keywords: [
     "film önerisi",
     "dizi önerisi",
