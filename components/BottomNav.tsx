@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 
 const tabs = [
   { id: 'home', label: 'Ana Sayfa', path: '/', icon: 'home' },
+  { id: 'search', label: 'Arama', path: '/search', icon: 'search' },
   { id: 'vizyon', label: 'Vizyon', path: '/vizyon', icon: 'film' },
   { id: 'history', label: 'Önerilerim', path: '/history', icon: 'list' },
   { id: 'assistant', label: 'Asistan', path: '/assistant', icon: 'bot' },
@@ -15,6 +16,8 @@ function NavIcon({ name, active }: { name: string; active: boolean }) {
   const props = { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: color, strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
 
   switch (name) {
+    case 'search':
+      return <svg {...props}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
     case 'film':
       return <svg {...props}><rect x='2' y='4' width='20' height='16' rx='2'/><path d='M2 8h20M2 12h20M7 4v16M17 4v16'/></svg>
     case 'home':

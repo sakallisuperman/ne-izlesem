@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import MovieDetailPopup from '@/components/MovieDetailPopup'
 
 interface Movie {
   id: number
@@ -17,7 +18,6 @@ export default function Vizyon() {
   const [upcoming, setUpcoming] = useState<Movie[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Movie | null>(null)
-  const [trailer, setTrailer] = useState<string | null>(null)
   const [tab, setTab] = useState<'now' | 'upcoming'>('now')
 
   useEffect(() => {
@@ -30,18 +30,6 @@ export default function Vizyon() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
-
-  const openMovie = async (movie: Movie) => {
-    setSelected(movie)
-    setTrailer(null)
-    try {
-      const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
-      const vidRes = await fetch(`https://api.themoviedb.org/3/movie/${movie.id}/videos?api_key=${apiKey}`)
-      const vidData = await vidRes.json()
-      const tr = vidData.results?.find((v: any) => v.type === 'Trailer' && v.site === 'YouTube')
-      if (tr) setTrailer(tr.key)
-    } catch {}
-  }
 
   const movies = tab === 'now' ? nowPlaying : upcoming
 
@@ -56,40 +44,19 @@ export default function Vizyon() {
   return (
     <main className="min-h-screen pt-6 px-4 pb-24" style={{ background: '#0a0a0f' }}>
       {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: '#000000cc' }} onClick={() => setSelected(null)}>
-          <div className="w-full max-w-md rounded-2xl overflow-hidden relative" style={{ background: '#12121a', maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            <button onClick={() => setSelected(null)} className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm" style={{ background: '#00000088', color: '#fff' }}>✕</button>
-            {selected.backdrop ? (
-              <div className="relative" style={{ height: '200px' }}>
-                <img src={selected.backdrop} alt={selected.title} className="w-full h-full object-cover" />
-                <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, transparent 30%, #12121a)' }} />
-              </div>
-            ) : selected.poster ? (
-              <div className="relative" style={{ height: '200px' }}>
-                <img src={selected.poster} alt={selected.title} className="w-full h-full object-cover" style={{ objectPosition: 'top' }} />
-                <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, transparent 30%, #12121a)' }} />
-              </div>
-            ) : null}
-            <div className="p-5">
-              <h2 className="text-xl font-bold mb-1" style={{ color: '#f1f5f9' }}>{selected.title}</h2>
-              {selected.original_title !== selected.title && (
-                <p className="text-sm mb-2" style={{ color: '#94a3b8' }}>{selected.original_title}</p>
-              )}
-              <div className="flex gap-3 mb-3 text-sm" style={{ color: '#94a3b8' }}>
-                <span>📅 {selected.release_date}</span>
-                <span>⭐ {selected.vote_average}</span>
-              </div>
-              {selected.overview && (
-                <p className="text-sm leading-relaxed mb-4" style={{ color: '#cbd5e1' }}>{selected.overview}</p>
-              )}
-              {trailer && (
-                <div className="aspect-video rounded-xl overflow-hidden">
-                  <iframe className="w-full h-full" src={`https://www.youtube.com/embed/${trailer}`} allowFullScreen allow="autoplay" />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <MovieDetailPopup
+          isOpen={!!selected}
+          onClose={() => setSelected(null)}
+          movieId={selected.id}
+          mediaType="movie"
+          title={selected.title}
+          originalTitle={selected.original_title}
+          poster={selected.poster}
+          backdrop={selected.backdrop}
+          overview={selected.overview}
+          releaseDate={selected.release_date}
+          voteAverage={selected.vote_average}
+        />
       )}
 
       <div className="max-w-2xl mx-auto">
@@ -121,7 +88,7 @@ export default function Vizyon() {
             {movies.map(movie => (
               <button
                 key={movie.id}
-                onClick={() => openMovie(movie)}
+                onClick={() => setSelected(movie)}
                 className="rounded-xl overflow-hidden border text-left transition-all hover:scale-[1.02] active:scale-95"
                 style={{ background: '#12121a', borderColor: 'rgba(255,255,255,0.06)' }}
               >

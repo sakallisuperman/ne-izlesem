@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
+import MovieDetailPopup from '@/components/MovieDetailPopup'
 
 interface Stats {
   recommendations: string
@@ -18,7 +19,8 @@ interface PickDetail {
   poster: string | null
   backdrop: string | null
   overview: string | null
-  trailer_key: string | null
+  tmdbId: number | null
+  mediaType: 'movie' | 'tv'
 }
 
 export default function Home() {
@@ -49,18 +51,11 @@ export default function Home() {
 
   const openDetail = async (pick: typeof dailyPicks[0]) => {
     const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
-    const mediaType = pick.type === 'film' ? 'movie' : 'tv'
+    const mediaType: 'movie' | 'tv' = pick.type === 'film' ? 'movie' : 'tv'
     try {
       const searchRes = await fetch(`https://api.themoviedb.org/3/search/${mediaType}?api_key=${apiKey}&query=${encodeURIComponent(pick.originalTitle)}&language=tr-TR`)
       const searchData = await searchRes.json()
       const item = searchData.results?.[0]
-      let trailer_key = null
-      if (item) {
-        const vidRes = await fetch(`https://api.themoviedb.org/3/${mediaType}/${item.id}/videos?api_key=${apiKey}`)
-        const vidData = await vidRes.json()
-        const tr = vidData.results?.find((v: any) => v.type === 'Trailer' && v.site === 'YouTube')
-        trailer_key = tr?.key || null
-      }
       setPopup({
         title: pick.originalTitle,
         turkish_title: pick.title,
@@ -70,12 +65,13 @@ export default function Home() {
         poster: item?.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null,
         backdrop: item?.backdrop_path ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}` : null,
         overview: item?.overview || null,
-        trailer_key,
+        tmdbId: item?.id || null,
+        mediaType,
       })
     } catch {
       setPopup({
         title: pick.originalTitle, turkish_title: pick.title, type: pick.type,
-        year: pick.year, imdb: pick.imdb, poster: null, backdrop: null, overview: null, trailer_key: null,
+        year: pick.year, imdb: pick.imdb, poster: null, backdrop: null, overview: null, tmdbId: null, mediaType,
       })
     }
   }
@@ -92,47 +88,20 @@ export default function Home() {
       <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(10,10,15,0.3) 0%, rgba(10,10,15,0.85) 35%, #0a0a0f 60%)' }} />
 
       {popup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: '#000000cc' }} onClick={() => setPopup(null)}>
-          <div className="w-full max-w-md rounded-2xl overflow-hidden relative" style={{ background: '#12121a', maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            <button onClick={() => setPopup(null)} className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm" style={{ background: '#00000088', color: '#fff' }}>✕</button>
-            {popup.backdrop ? (
-              <div className="relative" style={{ height: '200px' }}>
-                <img src={popup.backdrop} alt={popup.title} className="w-full h-full object-cover" />
-                <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, transparent 30%, #12121a)' }} />
-              </div>
-            ) : popup.poster ? (
-              <div className="relative" style={{ height: '200px' }}>
-                <img src={popup.poster} alt={popup.title} className="w-full h-full object-cover" style={{ objectPosition: 'top' }} />
-                <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, transparent 30%, #12121a)' }} />
-              </div>
-            ) : null}
-            <div className="p-5">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <h2 className="text-xl font-bold" style={{ color: '#f1f5f9' }}>{popup.title}</h2>
-                  {popup.turkish_title && popup.turkish_title !== popup.title && (
-                    <p className="text-sm" style={{ color: '#94a3b8' }}>{popup.turkish_title}</p>
-                  )}
-                </div>
-                <span className="px-3 py-1 rounded-full text-xs font-semibold ml-3 shrink-0" style={{ background: popup.type === 'film' ? '#f59e0b22' : '#3b82f622', color: popup.type === 'film' ? '#f59e0b' : '#60a5fa' }}>
-                  {popup.type === 'film' ? 'Film' : 'Dizi'}
-                </span>
-              </div>
-              <div className="flex gap-3 mb-3 text-sm" style={{ color: '#94a3b8' }}>
-                <span>{popup.year}</span>
-                <span>⭐ {popup.imdb}</span>
-              </div>
-              {popup.overview && (
-                <p className="text-sm leading-relaxed mb-4" style={{ color: '#cbd5e1' }}>{popup.overview}</p>
-              )}
-              {popup.trailer_key && (
-                <div className="aspect-video rounded-xl overflow-hidden">
-                  <iframe className="w-full h-full" src={`https://www.youtube.com/embed/${popup.trailer_key}`} allowFullScreen allow="autoplay" />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <MovieDetailPopup
+          isOpen={!!popup}
+          onClose={() => setPopup(null)}
+          movieId={popup.tmdbId}
+          mediaType={popup.mediaType}
+          title={popup.title}
+          turkishTitle={popup.turkish_title !== popup.title ? popup.turkish_title : undefined}
+          poster={popup.poster}
+          backdrop={popup.backdrop}
+          overview={popup.overview}
+          year={popup.year}
+          imdb={popup.imdb}
+          contentType={popup.type === 'film' ? 'film' : 'dizi'}
+        />
       )}
 
       <div className="relative z-10 flex flex-col flex-1 px-6 max-w-lg mx-auto w-full">
