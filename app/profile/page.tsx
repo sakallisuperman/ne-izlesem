@@ -6,37 +6,81 @@ import { supabase } from '@/lib/supabase'
 interface Stats {
   watchlist: number
   watched: number
-  quiz: number
+  reviews: number
 }
+
+const BADGE_THRESHOLDS = [
+  { name: 'Yeni Üye',          emoji: '🌱', min: 0,   next: 50  },
+  { name: 'Film Sever',         emoji: '🎬', min: 50,  next: 150 },
+  { name: 'Sinefil',            emoji: '🎭', min: 150, next: 300 },
+  { name: 'Film Gurmesi',       emoji: '🏆', min: 300, next: 500 },
+  { name: 'Efsane Eleştirmen',  emoji: '⭐', min: 500, next: null },
+]
+
+const PLATFORMS = ['Netflix', 'Amazon Prime', 'Disney+', 'BluTV', 'MUBI', 'Exxen', 'Gain', 'HBO Max', 'Tabii']
 
 export default function Profile() {
   const { user, loading, signInWithGoogle, signOut } = useAuth()
-  const [stats, setStats] = useState<Stats>({ watchlist: 0, watched: 0, quiz: 0 })
-  const [statsLoading, setStatsLoading] = useState(false)
+
+  const [stats, setStats]                 = useState<Stats>({ watchlist: 0, watched: 0, reviews: 0 })
+  const [statsLoading, setStatsLoading]   = useState(false)
+  const [points, setPoints]               = useState(0)
+  const [badge, setBadge]                 = useState('Yeni Üye')
+  const [platforms, setPlatforms]         = useState<string[]>([])
+  const [savingPlatforms, setSavingPlatforms] = useState(false)
+  const [platformsSaved, setPlatformsSaved]   = useState(false)
 
   useEffect(() => {
     if (!user) return
     setStatsLoading(true)
 
     Promise.all([
-      supabase
-        .from('watchlist')
-        .select('status')
-        .eq('user_id', user.id),
-      supabase
-        .from('sessions')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id),
-    ]).then(([watchlistRes, sessionsRes]) => {
-      const items = watchlistRes.data || []
+      supabase.from('watchlist').select('status').eq('user_id', user.id),
+      supabase.from('reviews').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      supabase.from('user_points').select('total_points, badge').eq('user_id', user.id).maybeSingle(),
+      supabase.from('profiles').select('preferred_platforms').eq('id', user.id).maybeSingle(),
+    ]).then(([wlRes, revRes, pointsRes, profileRes]) => {
+      const items = wlRes.data || []
       setStats({
         watchlist: items.filter(i => i.status === 'saved').length,
-        watched: items.filter(i => i.status === 'watched').length,
-        quiz: sessionsRes.count || 0,
+        watched:   items.filter(i => i.status === 'watched').length,
+        reviews:   revRes.count || 0,
       })
+      if (pointsRes.data) {
+        setPoints(pointsRes.data.total_points)
+        setBadge(pointsRes.data.badge)
+      }
+      if (profileRes.data?.preferred_platforms) {
+        setPlatforms(profileRes.data.preferred_platforms)
+      }
       setStatsLoading(false)
     })
   }, [user])
+
+  const togglePlatform = (p: string) => {
+    setPlatforms(prev =>
+      prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
+    )
+    setPlatformsSaved(false)
+  }
+
+  const savePlatforms = async () => {
+    if (!user) return
+    setSavingPlatforms(true)
+    await supabase.from('profiles').upsert(
+      { id: user.id, preferred_platforms: platforms },
+      { onConflict: 'id' }
+    )
+    setSavingPlatforms(false)
+    setPlatformsSaved(true)
+    setTimeout(() => setPlatformsSaved(false), 2000)
+  }
+
+  const badgeInfo    = BADGE_THRESHOLDS.find(b => b.name === badge) || BADGE_THRESHOLDS[0]
+  const progressPct  = badgeInfo.next
+    ? Math.min(100, Math.round(((points - badgeInfo.min) / (badgeInfo.next - badgeInfo.min)) * 100))
+    : 100
+  const pointsToNext = badgeInfo.next ? badgeInfo.next - points : 0
 
   if (loading) {
     return (
@@ -74,7 +118,9 @@ export default function Profile() {
   return (
     <main className="min-h-screen px-6 pt-12 pb-24" style={{ background: '#0a0a0f' }}>
       <div className="max-w-md mx-auto">
-        <div className="flex flex-col items-center mb-10">
+
+        {/* Avatar + İsim */}
+        <div className="flex flex-col items-center mb-6">
           {user.user_metadata?.avatar_url ? (
             <img
               src={user.user_metadata.avatar_url}
@@ -94,7 +140,62 @@ export default function Profile() {
           <p className="text-sm" style={{ color: '#94a3b8' }}>{user.email}</p>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mb-8">
+        {/* ─── Rozet Kartı ─── */}
+        <div className="rounded-2xl p-5 mb-6 border" style={{ background: '#12121a', borderColor: '#f59e0b22' }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <span style={{ fontSize: '36px' }}>{badgeInfo.emoji}</span>
+              <div>
+                <p className="font-bold text-lg leading-tight" style={{ color: '#f59e0b' }}>{badge}</p>
+                <p className="text-sm" style={{ color: '#64748b' }}>{points} puan</p>
+              </div>
+            </div>
+            {badgeInfo.next && (
+              <div className="text-right">
+                <p className="text-xs" style={{ color: '#64748b' }}>Sıradaki</p>
+                <p className="text-xs font-medium" style={{ color: '#94a3b8' }}>
+                  {BADGE_THRESHOLDS[BADGE_THRESHOLDS.indexOf(badgeInfo) + 1]?.emoji}{' '}
+                  {BADGE_THRESHOLDS[BADGE_THRESHOLDS.indexOf(badgeInfo) + 1]?.name}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full rounded-full overflow-hidden" style={{ height: '6px', background: '#0f172a' }}>
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{ width: `${progressPct}%`, background: 'linear-gradient(90deg, #f59e0b, #fcd34d)' }}
+            />
+          </div>
+          <div className="flex justify-between mt-1.5">
+            <span className="text-[10px]" style={{ color: '#475569' }}>{progressPct}%</span>
+            {pointsToNext > 0 && (
+              <span className="text-[10px]" style={{ color: '#475569' }}>{pointsToNext} puan kaldı</span>
+            )}
+            {!badgeInfo.next && (
+              <span className="text-[10px]" style={{ color: '#f59e0b' }}>Maksimum rozet!</span>
+            )}
+          </div>
+
+          {/* Puan kazanma ipuçları */}
+          <div className="mt-3 pt-3 border-t grid grid-cols-2 gap-1.5" style={{ borderColor: '#ffffff08' }}>
+            {[
+              { label: 'Yorum yaz', pts: '+10' },
+              { label: 'Puan ver', pts: '+5' },
+              { label: 'Arkadaşına öner', pts: '+15' },
+              { label: 'Film izle', pts: '+3' },
+            ].map(tip => (
+              <div key={tip.label} className="flex items-center justify-between rounded-lg px-2.5 py-1.5" style={{ background: '#0f172a' }}>
+                <span className="text-[10px]" style={{ color: '#64748b' }}>{tip.label}</span>
+                <span className="text-[10px] font-bold" style={{ color: '#f59e0b' }}>{tip.pts}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ─── İstatistikler ─── */}
+        <div className="grid grid-cols-3 gap-3 mb-6">
           <div className="text-center p-3 rounded-xl" style={{ background: '#12121a' }}>
             <p className="text-lg font-bold" style={{ color: '#f59e0b' }}>
               {statsLoading ? '—' : stats.watchlist}
@@ -109,21 +210,56 @@ export default function Profile() {
           </div>
           <div className="text-center p-3 rounded-xl" style={{ background: '#12121a' }}>
             <p className="text-lg font-bold" style={{ color: '#3b82f6' }}>
-              {statsLoading ? '—' : stats.quiz}
+              {statsLoading ? '—' : stats.reviews}
             </p>
-            <p className="text-[10px]" style={{ color: '#64748b' }}>Quiz</p>
+            <p className="text-[10px]" style={{ color: '#64748b' }}>Yorumlarım</p>
           </div>
         </div>
 
-        <div className="flex flex-col gap-3">
+        {/* ─── Platform Tercihleri ─── */}
+        <div className="rounded-2xl p-5 mb-6" style={{ background: '#12121a' }}>
+          <p className="text-sm font-semibold mb-1" style={{ color: '#f1f5f9' }}>Platform Tercihlerim</p>
+          <p className="text-xs mb-4" style={{ color: '#64748b' }}>Seçtiğin platformlar quiz'de otomatik seçili gelir.</p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {PLATFORMS.map(p => {
+              const active = platforms.includes(p)
+              return (
+                <button
+                  key={p}
+                  onClick={() => togglePlatform(p)}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
+                  style={{
+                    background: active ? '#f59e0b' : '#0f172a',
+                    color: active ? '#0a0a0f' : '#94a3b8',
+                    borderColor: active ? '#f59e0b' : '#ffffff15',
+                  }}
+                >
+                  {p}
+                </button>
+              )
+            })}
+          </div>
           <button
-            onClick={signOut}
-            className="w-full py-3 rounded-xl font-medium transition-all border"
-            style={{ background: '#12121a', color: '#ef4444', borderColor: '#ef444433' }}
+            onClick={savePlatforms}
+            disabled={savingPlatforms}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
+            style={{
+              background: platformsSaved ? '#22c55e22' : '#f59e0b',
+              color: platformsSaved ? '#22c55e' : '#0a0a0f',
+            }}
           >
-            Çıkış Yap
+            {platformsSaved ? '✓ Kaydedildi' : savingPlatforms ? 'Kaydediliyor...' : 'Tercihleri Kaydet'}
           </button>
         </div>
+
+        {/* ─── Çıkış ─── */}
+        <button
+          onClick={signOut}
+          className="w-full py-3 rounded-xl font-medium transition-all border"
+          style={{ background: '#12121a', color: '#ef4444', borderColor: '#ef444433' }}
+        >
+          Çıkış Yap
+        </button>
       </div>
     </main>
   )

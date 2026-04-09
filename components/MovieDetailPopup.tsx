@@ -82,9 +82,15 @@ export default function MovieDetailPopup({
   const [submitMsg, setSubmitMsg] = useState('')
 
   const [copied, setCopied] = useState(false)
+  const [badgesMap, setBadgesMap] = useState<Record<string, string>>({})
 
   // Reviews için canonical title
   const reviewKey = (originalTitle && originalTitle !== title) ? originalTitle : title
+
+  const BADGE_EMOJIS: Record<string, string> = {
+    'Yeni Üye': '🌱', 'Film Sever': '🎬', 'Sinefil': '🎭',
+    'Film Gurmesi': '🏆', 'Efsane Eleştirmen': '⭐',
+  }
 
   const myExistingReview = reviews.find(r => r.user_id === user?.id)
   const avgRating = reviews.length > 0
@@ -146,8 +152,22 @@ export default function MovieDetailPopup({
       .select('id, user_id, user_name, rating, comment, created_at')
       .eq('movie_title', reviewKey)
       .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setReviews(data || [])
+      .then(async ({ data }) => {
+        const list = data || []
+        setReviews(list)
+        // Yorumcuların rozetlerini tek sorguda çek
+        const userIds = list.map(r => r.user_id).filter((id, i, arr) => arr.indexOf(id) === i)
+        if (userIds.length > 0) {
+          const { data: pts } = await supabase
+            .from('user_points')
+            .select('user_id, badge')
+            .in('user_id', userIds)
+          if (pts) {
+            const map: Record<string, string> = {}
+            pts.forEach((p: { user_id: string; badge: string }) => { map[p.user_id] = p.badge })
+            setBadgesMap(map)
+          }
+        }
         setReviewsLoading(false)
       })
   }, [isOpen, reviewKey])
@@ -177,9 +197,12 @@ export default function MovieDetailPopup({
         created_at: new Date().toISOString(),
       }
       setReviews(prev => [newReview, ...prev])
+      // Kendi rozet bilgisini de map'e ekle
+      const { data: myPts } = await supabase.from('user_points').select('badge').eq('user_id', user.id).maybeSingle()
+      if (myPts) setBadgesMap(prev => ({ ...prev, [user.id]: myPts.badge }))
       setMyRating(0)
       setMyComment('')
-      setSubmitMsg('Yorumun eklendi!')
+      setSubmitMsg('Yorumun eklendi! 🎉')
     }
     setSubmitting(false)
   }
@@ -200,6 +223,8 @@ export default function MovieDetailPopup({
         setCopied(true)
         setTimeout(() => setCopied(false), 2000)
       }
+      // Paylaşım için puan ver
+      if (user) { supabase.rpc('award_share_points').then(() => {}) }
     } catch {}
   }
 
@@ -374,7 +399,14 @@ export default function MovieDetailPopup({
                   {myExistingReview.comment && (
                     <p className="text-xs" style={{ color: '#cbd5e1' }}>{myExistingReview.comment}</p>
                   )}
-                  <p className="text-[10px] mt-1" style={{ color: '#475569' }}>Senin yorumun</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-[10px]" style={{ color: '#475569' }}>Senin yorumun</p>
+                    {badgesMap[user?.id || ''] && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: '#f59e0b15', color: '#f59e0b' }}>
+                        {BADGE_EMOJIS[badgesMap[user?.id || '']] || ''} {badgesMap[user?.id || '']}
+                      </span>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="mb-4">
@@ -451,6 +483,15 @@ export default function MovieDetailPopup({
                           {review.user_name.charAt(0).toUpperCase()}
                         </div>
                         <span className="text-xs font-medium" style={{ color: '#cbd5e1' }}>{review.user_name.split(' ')[0]}</span>
+                        {badgesMap[review.user_id] && (
+                          <span
+                            className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                            style={{ background: '#f59e0b15', color: '#f59e0b' }}
+                            title={badgesMap[review.user_id]}
+                          >
+                            {BADGE_EMOJIS[badgesMap[review.user_id]] || ''} {badgesMap[review.user_id]}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="flex gap-0.5">

@@ -94,6 +94,8 @@ export default function Results() {
         setCopiedIndex(index)
         setTimeout(() => setCopiedIndex(null), 2000)
       }
+      // Paylaşım için puan ver
+      if (user) { supabase.rpc('award_share_points').then(() => {}) }
     } catch {}
   }
 
