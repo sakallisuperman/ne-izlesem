@@ -54,6 +54,7 @@ export default function Results() {
   const [activeTrailer, setActiveTrailer] = useState<string | null>(null)
   const [savedItems, setSavedItems] = useState<Set<number>>(new Set())
   const [savingIndex, setSavingIndex] = useState<number | null>(null)
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
 
   useEffect(() => {
     const answers = JSON.parse(localStorage.getItem('quiz_answers') || '{}')
@@ -81,6 +82,20 @@ export default function Results() {
       .catch(() => setError('Bir sorun oluştu, tekrar dene'))
       .finally(() => setLoading(false))
   }, [])
+
+  const shareRec = async (rec: Recommendation, index: number) => {
+    const text = `"${rec.title}" ${rec.type === 'dizi' ? 'dizisini' : 'filmini'} izlemelisin! 🎬`
+    const url = 'https://ne-izlesemapp.vercel.app'
+    try {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({ title: rec.title, text, url })
+      } else {
+        await navigator.clipboard.writeText(`${text}\n${url}`)
+        setCopiedIndex(index)
+        setTimeout(() => setCopiedIndex(null), 2000)
+      }
+    } catch {}
+  }
 
   const saveToWatchlist = async (rec: Recommendation, index: number) => {
     if (!user) {
@@ -185,22 +200,36 @@ export default function Results() {
                     </span>
                   ))}
                 </div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs" style={{ color: '#64748b' }}>Puanla:</span>
-                  <StarRating onRate={(r) => console.log(rec.title, r)} />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => saveToWatchlist(rec, i)}
+                    disabled={savedItems.has(i) || savingIndex === i}
+                    className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all border"
+                    style={{
+                      background: savedItems.has(i) ? '#22c55e22' : '#f59e0b11',
+                      color: savedItems.has(i) ? '#22c55e' : '#f59e0b',
+                      borderColor: savedItems.has(i) ? '#22c55e44' : '#f59e0b33',
+                    }}
+                  >
+                    {savedItems.has(i) ? '✓ Kaydedildi' : savingIndex === i ? 'Kaydediliyor...' : user ? '+ Listeme Ekle' : '+ Kaydet'}
+                  </button>
+                  <button
+                    onClick={() => shareRec(rec, i)}
+                    className="px-4 py-3 rounded-xl text-sm font-semibold transition-all border flex items-center gap-1.5"
+                    style={{
+                      background: copiedIndex === i ? '#22c55e22' : '#ffffff08',
+                      color: copiedIndex === i ? '#22c55e' : '#94a3b8',
+                      borderColor: copiedIndex === i ? '#22c55e44' : '#ffffff15',
+                    }}
+                  >
+                    {copiedIndex === i ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                    )}
+                    {copiedIndex === i ? 'Kopyalandı' : 'Öner'}
+                  </button>
                 </div>
-                <button
-                  onClick={() => saveToWatchlist(rec, i)}
-                  disabled={savedItems.has(i) || savingIndex === i}
-                  className="w-full py-3 rounded-xl text-sm font-semibold transition-all border"
-                  style={{
-                    background: savedItems.has(i) ? '#22c55e22' : '#f59e0b11',
-                    color: savedItems.has(i) ? '#22c55e' : '#f59e0b',
-                    borderColor: savedItems.has(i) ? '#22c55e44' : '#f59e0b33',
-                  }}
-                >
-                  {savedItems.has(i) ? '✓ Kaydedildi' : savingIndex === i ? 'Kaydediliyor...' : user ? '+ Listeme Ekle' : '+ Kaydet (Giriş Yap)'}
-                </button>
               </div>
             </div>
           ))}

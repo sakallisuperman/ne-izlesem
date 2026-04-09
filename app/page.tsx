@@ -10,6 +10,14 @@ interface Stats {
   titles: string
 }
 
+interface PopularMovie {
+  title: string
+  turkish_title: string
+  type: string
+  watch_count: number
+  poster: string | null
+}
+
 interface PickDetail {
   title: string
   turkish_title: string
@@ -27,6 +35,7 @@ export default function Home() {
   const [stats, setStats] = useState<Stats>({ recommendations: '14.8K+', users: '3.2K+', titles: '850+' })
   const [loaded, setLoaded] = useState(false)
   const [posters, setPosters] = useState<string[]>([])
+  const [popularMovies, setPopularMovies] = useState<PopularMovie[]>([])
   const { user } = useAuth()
   const [popup, setPopup] = useState<PickDetail | null>(null)
 
@@ -47,6 +56,7 @@ export default function Home() {
       } catch {}
     }).catch(() => {})
     fetch('/api/stats').then(r => r.json()).then(setStats).catch(() => {})
+    fetch('/api/popular').then(r => r.json()).then(d => setPopularMovies(d.movies || [])).catch(() => {})
   }, [])
 
   const openDetail = async (pick: typeof dailyPicks[0]) => {
@@ -134,6 +144,35 @@ export default function Home() {
               ))}
             </div>
           </div>
+          {popularMovies.length > 0 && (
+            <div className={loaded ? 'w-full mb-6 transition-all duration-700 delay-150 opacity-100 translate-y-0' : 'w-full mb-6 transition-all duration-700 delay-150 opacity-0 translate-y-4'}>
+              <p className="text-center text-[10px] font-semibold mb-2 tracking-widest" style={{ color: '#f59e0b44' }}>EN ÇOK İZLENENLER</p>
+              <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                {popularMovies.map((m, i) => (
+                  <div key={i} className="flex-shrink-0 rounded-xl overflow-hidden border" style={{ width: '80px', background: '#12121a', borderColor: 'rgba(255,255,255,0.06)' }}>
+                    {m.poster ? (
+                      <div className="relative" style={{ height: '108px' }}>
+                        <img src={m.poster} alt={m.title} className="w-full h-full object-cover" />
+                        <div className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-center" style={{ background: 'linear-gradient(0deg, #12121a, transparent)' }}>
+                          <span className="text-[8px]" style={{ color: '#f59e0b' }}>👁 {m.watch_count}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center" style={{ height: '108px', background: 'linear-gradient(135deg, #1a1a2e, #16213e)' }}>
+                        <span style={{ fontSize: '24px' }}>🎬</span>
+                      </div>
+                    )}
+                    <div className="px-1.5 py-1.5">
+                      <p className="text-[9px] leading-tight font-medium" style={{ color: '#cbd5e1', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {m.turkish_title || m.title}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className={loaded ? 'text-center mb-8 transition-all duration-700 delay-200 opacity-100 translate-y-0' : 'text-center mb-8 transition-all duration-700 delay-200 opacity-0 translate-y-4'}>
             <Link href="/quiz"><button className="px-14 py-5 rounded-full text-xl font-semibold transition-all hover:scale-105 active:scale-95" style={{ background: '#f59e0b', color: '#0a0a0f' }}>Başla →</button></Link>
             <p className="text-sm mt-3" style={{ color: '#475569' }}>veya <Link href="/assistant" style={{ color: '#f59e0b', fontWeight: 500 }}>asistanla konuşarak</Link> öneri al</p>
