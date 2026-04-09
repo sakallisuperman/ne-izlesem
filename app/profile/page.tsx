@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
+import NotificationBell from '@/components/NotificationBell'
+import { checkBadgeNotification } from '@/lib/notifications'
 
 interface Stats {
   watchlist: number
@@ -49,6 +51,7 @@ export default function Profile() {
       if (pointsRes.data) {
         setPoints(pointsRes.data.total_points)
         setBadge(pointsRes.data.badge)
+        checkBadgeNotification(pointsRes.data.badge)
       }
       if (profileRes.data?.preferred_platforms) {
         setPlatforms(profileRes.data.preferred_platforms)
@@ -118,6 +121,11 @@ export default function Profile() {
   return (
     <main className="min-h-screen px-6 pt-12 pb-24" style={{ background: '#0a0a0f' }}>
       <div className="max-w-md mx-auto">
+
+        {/* Üst bar */}
+        <div className="flex justify-end mb-4">
+          <NotificationBell />
+        </div>
 
         {/* Avatar + İsim */}
         <div className="flex flex-col items-center mb-6">

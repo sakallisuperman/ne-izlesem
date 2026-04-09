@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { getFilmAwards } from '@/lib/awards'
 
 interface CastMember {
   id: number
@@ -23,6 +24,7 @@ interface EnrichedData {
   director: string | null
   collection_name: string | null
   collection_movies: CollectionMovie[]
+  providers: string[]
 }
 
 interface Review {
@@ -105,14 +107,18 @@ export default function MovieDetailPopup({
     const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
     const fetchAll = async () => {
       try {
-        const [detailsRes, creditsRes, videosRes] = await Promise.all([
+        const [detailsRes, creditsRes, videosRes, providersRes] = await Promise.all([
           fetch(`https://api.themoviedb.org/3/${mediaType}/${movieId}?api_key=${apiKey}&language=tr-TR`),
           fetch(`https://api.themoviedb.org/3/${mediaType}/${movieId}/credits?api_key=${apiKey}&language=tr-TR`),
           fetch(`https://api.themoviedb.org/3/${mediaType}/${movieId}/videos?api_key=${apiKey}`),
+          fetch(`https://api.themoviedb.org/3/${mediaType}/${movieId}/watch/providers?api_key=${apiKey}`),
         ])
-        const [details, credits, videos] = await Promise.all([
-          detailsRes.json(), creditsRes.json(), videosRes.json(),
+        const [details, credits, videos, providersData] = await Promise.all([
+          detailsRes.json(), creditsRes.json(), videosRes.json(), providersRes.json(),
         ])
+        const trProviders: string[] = (providersData?.results?.TR?.flatrate || [])
+          .map((p: any) => p.provider_name as string)
+          .filter(Boolean)
         const trailer = videos.results?.find((v: any) => v.type === 'Trailer' && v.site === 'YouTube')
         const cast: CastMember[] = (credits.cast || []).slice(0, 5).map((c: any) => ({
           id: c.id, name: c.name, character: c.character, profile_path: c.profile_path,
@@ -130,9 +136,9 @@ export default function MovieDetailPopup({
               .map((p: any) => ({ id: p.id, title: p.title, poster_path: p.poster_path, release_date: p.release_date ? p.release_date.substring(0, 4) : '' }))
           } catch {}
         }
-        setEnriched({ trailer_key: trailer?.key || null, cast, director: directorEntry?.name || null, collection_name, collection_movies })
+        setEnriched({ trailer_key: trailer?.key || null, cast, director: directorEntry?.name || null, collection_name, collection_movies, providers: trProviders })
       } catch {
-        setEnriched({ trailer_key: null, cast: [], director: null, collection_name: null, collection_movies: [] })
+        setEnriched({ trailer_key: null, cast: [], director: null, collection_name: null, collection_movies: [], providers: [] })
       } finally {
         setLoadingEnrich(false)
       }
@@ -299,6 +305,34 @@ export default function MovieDetailPopup({
             {enriched?.director && <span>🎬 {enriched.director}</span>}
             {avgRating && <span style={{ color: '#f59e0b' }}>💬 {avgRating} ({reviews.length})</span>}
           </div>
+
+          {/* Ödül badge'leri */}
+          {(() => {
+            const awards = getFilmAwards(title, originalTitle)
+            return awards.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 mt-2 mb-1">
+                {awards.map((a, i) => (
+                  <span key={i} className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                    style={{ background: a.color + '22', color: a.color, border: `1px solid ${a.color}44` }}>
+                    {a.label}
+                  </span>
+                ))}
+              </div>
+            ) : null
+          })()}
+
+          {/* Nerede izlenir (TR) */}
+          {enriched && enriched.providers.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2 mb-1 items-center">
+              <span className="text-[10px]" style={{ color: '#475569' }}>İzle:</span>
+              {enriched.providers.map((p, i) => (
+                <span key={i} className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                  style={{ background: '#22c55e18', color: '#22c55e', border: '1px solid #22c55e33' }}>
+                  {p}
+                </span>
+              ))}
+            </div>
+          )}
 
           {overview && (
             <p className="text-sm leading-relaxed mt-3 mb-4" style={{ color: '#cbd5e1' }}>{overview}</p>

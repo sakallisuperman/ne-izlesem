@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import MovieDetailPopup from '@/components/MovieDetailPopup'
+import NotificationBell from '@/components/NotificationBell'
+import { checkVizyonNotification } from '@/lib/notifications'
 
 interface Stats {
   recommendations: string
@@ -46,6 +48,7 @@ export default function Home() {
 
   useEffect(() => {
     setLoaded(true)
+    checkVizyonNotification()
     fetch('/api/daily-picks').then(r => r.json()).then(async () => {
       try {
         const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
@@ -120,9 +123,12 @@ export default function Home() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="#94a3b8" stroke="none"/></svg>
             Takip Et
           </a>
-          <Link href="/profile" className="text-xs font-medium transition-opacity hover:opacity-80" style={{ color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)', padding: '5px 14px', borderRadius: '20px', background: 'rgba(245,158,11,0.08)' }}>
-            {user ? 'Hoş geldin, ' + (user.user_metadata?.full_name || user.email || 'Profil').split(' ')[0] : 'Giriş Yap'}
-          </Link>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <Link href="/profile" className="text-xs font-medium transition-opacity hover:opacity-80" style={{ color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)', padding: '5px 14px', borderRadius: '20px', background: 'rgba(245,158,11,0.08)' }}>
+              {user ? 'Hoş geldin, ' + (user.user_metadata?.full_name || user.email || 'Profil').split(' ')[0] : 'Giriş Yap'}
+            </Link>
+          </div>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center" style={{ marginTop: '-20px' }}>
           <div className={loaded ? 'text-center mb-10 transition-all duration-700 opacity-100 translate-y-0' : 'text-center mb-10 transition-all duration-700 opacity-0 translate-y-4'}>
