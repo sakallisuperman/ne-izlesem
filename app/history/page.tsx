@@ -140,12 +140,12 @@ export default function History() {
             <button onClick={() => setPopup(null)} className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm" style={{ background: '#00000088', color: '#fff' }}>✕</button>
             {popup.backdrop ? (
               <div className="relative" style={{ height: '200px' }}>
-                <img src={popup.backdrop} alt={popup.title} className="w-full h-full object-cover" />
+                <img src={popup.backdrop} alt={popup.title} className="w-full h-full object-cover" loading="lazy" />
                 <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, transparent 30%, #12121a)' }} />
               </div>
             ) : popup.poster ? (
               <div className="relative" style={{ height: '200px' }}>
-                <img src={popup.poster} alt={popup.title} className="w-full h-full object-cover" style={{ objectPosition: 'top' }} />
+                <img src={popup.poster} alt={popup.title} className="w-full h-full object-cover" style={{ objectPosition: 'top' }} loading="lazy" />
                 <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, transparent 30%, #12121a)' }} />
               </div>
             ) : null}

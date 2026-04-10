@@ -165,7 +165,7 @@ export default function Results() {
             <div key={i} className="rounded-2xl overflow-hidden border" style={{background: '#12121a', borderColor: '#ffffff15'}}>
               {tmdbData[i]?.poster_path && (
                 <div className="relative">
-                  <img src={tmdbData[i].poster_path!} alt={rec.title} className="w-full object-cover" style={{maxHeight: '300px', objectPosition: 'top'}} />
+                  <img src={tmdbData[i].poster_path!} alt={rec.title} className="w-full object-cover" style={{maxHeight: '300px', objectPosition: 'top'}} loading="lazy" />
                   {tmdbData[i]?.trailer_key && (
                     <button onClick={() => setActiveTrailer(tmdbData[i].trailer_key!)} className="absolute inset-0 flex items-center justify-center" style={{background: '#00000066'}}>
                       <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{background: '#f59e0b'}}>

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Arka plan -->
+  <rect width="512" height="512" rx="110" fill="#0a0a0f"/>
+
+  <!-- Film şeridi üst dekorasyonu -->
+  <rect x="24" y="24" width="464" height="52" rx="10" fill="#12121a"/>
+  <rect x="50"  y="36" width="32" height="28" rx="6" fill="#1e293b"/>
+  <rect x="108" y="36" width="32" height="28" rx="6" fill="#1e293b"/>
+  <rect x="166" y="36" width="32" height="28" rx="6" fill="#1e293b"/>
+  <rect x="224" y="36" width="32" height="28" rx="6" fill="#1e293b"/>
+  <rect x="282" y="36" width="32" height="28" rx="6" fill="#1e293b"/>
+  <rect x="340" y="36" width="32" height="28" rx="6" fill="#1e293b"/>
+  <rect x="398" y="36" width="32" height="28" rx="6" fill="#1e293b"/>
+  <rect x="430" y="36" width="32" height="28" rx="6" fill="#1e293b"/>
+
+  <!-- Film şeridi alt dekorasyonu -->
+  <rect x="24" y="436" width="464" height="52" rx="10" fill="#12121a"/>
+  <rect x="50"  y="448" width="32" height="28" rx="6" fill="#1e293b"/>
+  <rect x="108" y="448" width="32" height="28" rx="6" fill="#1e293b"/>
+  <rect x="166" y="448" width="32" height="28" rx="6" fill="#1e293b"/>
+  <rect x="224" y="448" width="32" height="28" rx="6" fill="#1e293b"/>
+  <rect x="282" y="448" width="32" height="28" rx="6" fill="#1e293b"/>
+  <rect x="340" y="448" width="32" height="28" rx="6" fill="#1e293b"/>
+  <rect x="398" y="448" width="32" height="28" rx="6" fill="#1e293b"/>
+  <rect x="430" y="448" width="32" height="28" rx="6" fill="#1e293b"/>
+
+  <!-- "Nİ" ana yazı - amber renk -->
+  <text
+    x="256" y="310"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="Arial Black, Arial, sans-serif"
+    font-weight="900"
+    font-size="220"
+    fill="#f59e0b"
+    letter-spacing="-8"
+  >Nİ</text>
+
+  <!-- Alt ayraç çizgisi -->
+  <line x1="140" y1="328" x2="372" y2="328" stroke="#f59e0b" stroke-width="3" stroke-linecap="round" opacity="0.4"/>
+
+  <!-- "Ne İzlesem?" küçük yazı -->
+  <text
+    x="256" y="380"
+    text-anchor="middle"
+    font-family="Arial, sans-serif"
+    font-weight="400"
+    font-size="44"
+    fill="#94a3b8"
+    letter-spacing="1"
+  >Ne İzlesem?</text>
+</svg>

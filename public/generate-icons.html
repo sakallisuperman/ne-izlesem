@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Ne İzlesem? – İkon Oluşturucu</title>
+  <style>
+    body { background: #1e1e2e; color: #f1f5f9; font-family: Arial, sans-serif;
+           display: flex; flex-direction: column; align-items: center; padding: 40px; gap: 24px; }
+    h1 { color: #f59e0b; margin: 0; }
+    p { color: #94a3b8; margin: 0; font-size: 14px; text-align: center; }
+    .canvases { display: flex; gap: 32px; flex-wrap: wrap; justify-content: center; }
+    .card { background: #12121a; border-radius: 16px; padding: 20px;
+            display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .card span { font-size: 12px; color: #64748b; }
+    button { background: #f59e0b; color: #0a0a0f; border: none; padding: 10px 24px;
+             border-radius: 999px; font-weight: bold; cursor: pointer; font-size: 14px; }
+    button:hover { background: #fcd34d; }
+  </style>
+</head>
+<body>
+  <h1>🎬 Ne İzlesem? İkon Oluşturucu</h1>
+  <p>Aşağıdaki ikonları indirip <code>public/icon-192.png</code> ve <code>public/icon-512.png</code> olarak kaydet.</p>
+
+  <div class="canvases">
+    <div class="card">
+      <canvas id="c192" width="192" height="192"></canvas>
+      <span>192 × 192</span>
+      <button onclick="download('c192','icon-192.png')">İndir 192×192</button>
+    </div>
+    <div class="card">
+      <canvas id="c512" width="512" height="512"></canvas>
+      <span>512 × 512</span>
+      <button onclick="download('c512','icon-512.png')">İndir 512×512</button>
+    </div>
+  </div>
+
+  <script>
+    function drawIcon(canvas) {
+      const ctx = canvas.getContext('2d');
+      const s = canvas.width;
+      const r = s * 0.215;
+
+      // Arka plan (yuvarlak köşe)
+      ctx.clearRect(0, 0, s, s);
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(0, 0, s, s, r);
+      } else {
+        const rr = r;
+        ctx.moveTo(rr, 0); ctx.lineTo(s-rr, 0); ctx.quadraticCurveTo(s, 0, s, rr);
+        ctx.lineTo(s, s-rr); ctx.quadraticCurveTo(s, s, s-rr, s);
+        ctx.lineTo(rr, s); ctx.quadraticCurveTo(0, s, 0, s-rr);
+        ctx.lineTo(0, rr); ctx.quadraticCurveTo(0, 0, rr, 0);
+        ctx.closePath();
+      }
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fill();
+
+      // Film şeridi üst
+      const sh = s * 0.1, sy = s * 0.047, sr = s * 0.02;
+      roundRect(ctx, s*0.047, sy, s*0.906, sh, sr, '#12121a');
+      for (let i = 0; i < 7; i++) {
+        const bw = s * 0.062, bh = sh * 0.54;
+        const bx = s * 0.098 + i * (s * 0.119), by = sy + (sh - bh) / 2;
+        roundRect(ctx, bx, by, bw, bh, bw * 0.3, '#1e293b');
+      }
+
+      // Film şeridi alt
+      const sy2 = s * 0.853;
+      roundRect(ctx, s*0.047, sy2, s*0.906, sh, sr, '#12121a');
+      for (let i = 0; i < 7; i++) {
+        const bw = s * 0.062, bh = sh * 0.54;
+        const bx = s * 0.098 + i * (s * 0.119), by = sy2 + (sh - bh) / 2;
+        roundRect(ctx, bx, by, bw, bh, bw * 0.3, '#1e293b');
+      }
+
+      // "Nİ" yazısı
+      ctx.fillStyle = '#f59e0b';
+      ctx.font = `900 ${s * 0.43}px "Arial Black", Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Nİ', s / 2, s * 0.49);
+
+      // Ayraç çizgisi
+      ctx.strokeStyle = 'rgba(245,158,11,0.35)';
+      ctx.lineWidth = s * 0.006;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(s * 0.27, s * 0.655);
+      ctx.lineTo(s * 0.73, s * 0.655);
+      ctx.stroke();
+
+      // "Ne İzlesem?" yazısı
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = `${s * 0.088}px Arial, sans-serif`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Ne İzlesem?', s / 2, s * 0.745);
+    }
+
+    function roundRect(ctx, x, y, w, h, r, fill) {
+      ctx.beginPath();
+      if (ctx.roundRect) { ctx.roundRect(x, y, w, h, r); }
+      else {
+        ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+        ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+        ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+        ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+      }
+      ctx.fillStyle = fill;
+      ctx.fill();
+    }
+
+    function download(canvasId, filename) {
+      const a = document.createElement('a');
+      a.download = filename;
+      a.href = document.getElementById(canvasId).toDataURL('image/png');
+      a.click();
+    }
+
+    drawIcon(document.getElementById('c192'));
+    drawIcon(document.getElementById('c512'));
+  </script>
+</body>
+</html>

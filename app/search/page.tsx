@@ -159,7 +159,7 @@ export default function SearchPage() {
               >
                 {result.poster ? (
                   <div className="relative" style={{ height: '220px' }}>
-                    <img src={result.poster} alt={result.title} className="w-full h-full object-cover" />
+                    <img src={result.poster} alt={result.title} className="w-full h-full object-cover" loading="lazy" />
                     <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, transparent 50%, #12121a)' }} />
                     <div className="absolute top-2 left-2">
                       <span className="text-[9px] px-2 py-0.5 rounded-full font-semibold" style={{ background: result.media_type === 'movie' ? '#f59e0b22' : '#3b82f622', color: result.media_type === 'movie' ? '#f59e0b' : '#60a5fa', backdropFilter: 'blur(4px)' }}>

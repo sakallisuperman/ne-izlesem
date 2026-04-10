@@ -93,7 +93,7 @@ export default function Home() {
     <main className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: '#0a0a0f' }}>
       <div className="absolute inset-0 grid grid-cols-4 gap-1 p-1 opacity-[0.12]" style={{ animation: 'bgScroll 60s linear infinite', height: '200%', marginTop: '-50%' }}>
         {posters.length > 0 ? posters.map((p, i) => (
-          <img key={i} src={p} alt="" className="rounded-lg w-full h-full object-cover" />
+          <img key={i} src={p} alt="" className="rounded-lg w-full h-full object-cover" loading="lazy" />
         )) : Array.from({ length: 20 }).map((_, i) => (
           <div key={i} className="rounded-lg" style={{ background: 'linear-gradient(135deg, #1a1a2e, #16213e)' }} />
         ))}
@@ -152,13 +152,13 @@ export default function Home() {
           </div>
           {popularMovies.length > 0 && (
             <div className={loaded ? 'w-full mb-6 transition-all duration-700 delay-150 opacity-100 translate-y-0' : 'w-full mb-6 transition-all duration-700 delay-150 opacity-0 translate-y-4'}>
-              <p className="text-center text-[10px] font-semibold mb-2 tracking-widest" style={{ color: '#f59e0b44' }}>EN ÇOK İZLENENLER</p>
+              <p className="text-center text-[10px] font-semibold mb-2 tracking-widest" style={{ color: '#f59e0b44' }}>🔥 EN ÇOK İZLENENLER</p>
               <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                 {popularMovies.map((m, i) => (
                   <div key={i} className="flex-shrink-0 rounded-xl overflow-hidden border" style={{ width: '80px', background: '#12121a', borderColor: 'rgba(255,255,255,0.06)' }}>
                     {m.poster ? (
                       <div className="relative" style={{ height: '108px' }}>
-                        <img src={m.poster} alt={m.title} className="w-full h-full object-cover" />
+                        <img src={m.poster} alt={m.title} className="w-full h-full object-cover" loading="lazy" />
                         <div className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-center" style={{ background: 'linear-gradient(0deg, #12121a, transparent)' }}>
                           <span className="text-[8px]" style={{ color: '#f59e0b' }}>👁 {m.watch_count}</span>
                         </div>

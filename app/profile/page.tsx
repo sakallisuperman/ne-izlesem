@@ -21,6 +21,28 @@ const BADGE_THRESHOLDS = [
 
 const PLATFORMS = ['Netflix', 'Amazon Prime', 'Disney+', 'BluTV', 'MUBI', 'Exxen', 'Gain', 'HBO Max', 'Tabii']
 
+function ShareButton() {
+  const [shared, setShared] = useState(false)
+  const share = async () => {
+    const data = { title: 'Ne İzlesem?', text: 'Ruh haline göre film ve dizi önerileri için bu uygulamayı dene!', url: 'https://ne-izlesemapp.vercel.app' }
+    if (navigator.share) {
+      try { await navigator.share(data); setShared(true); setTimeout(() => setShared(false), 2000) } catch {}
+    } else {
+      await navigator.clipboard.writeText(data.url)
+      setShared(true); setTimeout(() => setShared(false), 2000)
+    }
+  }
+  return (
+    <button
+      onClick={share}
+      className="w-full py-3 rounded-xl font-medium transition-all border mb-3"
+      style={{ background: shared ? '#22c55e22' : '#12121a', color: shared ? '#22c55e' : '#94a3b8', borderColor: shared ? '#22c55e33' : '#ffffff15' }}
+    >
+      {shared ? '✓ Paylaşıldı!' : '🔗 Uygulamayı Paylaş'}
+    </button>
+  )
+}
+
 export default function Profile() {
   const { user, loading, signInWithGoogle, signOut } = useAuth()
 
@@ -133,6 +155,7 @@ export default function Profile() {
             <img
               src={user.user_metadata.avatar_url}
               alt="Profil"
+              loading="lazy"
               className="w-20 h-20 rounded-full mb-4 border-2"
               style={{ borderColor: '#f59e0b' }}
             />
@@ -259,6 +282,9 @@ export default function Profile() {
             {platformsSaved ? '✓ Kaydedildi' : savingPlatforms ? 'Kaydediliyor...' : 'Tercihleri Kaydet'}
           </button>
         </div>
+
+        {/* ─── Uygulamayı Paylaş ─── */}
+        <ShareButton />
 
         {/* ─── Çıkış ─── */}
         <button

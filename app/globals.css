@@ -31,3 +31,16 @@ body {
   50% { transform: translateY(25%); }
   100% { transform: translateY(0); }
 }
+
+html {
+  scroll-behavior: smooth;
+}
+
+@keyframes pageFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page-enter {
+  animation: pageFadeIn 0.35s ease forwards;
+}

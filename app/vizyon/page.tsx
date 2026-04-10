@@ -94,7 +94,7 @@ export default function Vizyon() {
               >
                 {movie.poster ? (
                   <div className="relative" style={{ height: '200px' }}>
-                    <img src={movie.poster} alt={movie.title} className="w-full h-full object-cover" />
+                    <img src={movie.poster} alt={movie.title} className="w-full h-full object-cover" loading="lazy" />
                     <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, transparent 50%, #12121a)' }} />
                     <div className="absolute bottom-2 left-2 right-2">
                       <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: '#f59e0b33', color: '#f59e0b' }}>⭐ {movie.vote_average}</span>

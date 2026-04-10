@@ -260,12 +260,12 @@ export default function MovieDetailPopup({
 
         {backdrop ? (
           <div className="relative" style={{ height: '200px' }}>
-            <img src={backdrop} alt={title} className="w-full h-full object-cover" />
+            <img src={backdrop} alt={title} className="w-full h-full object-cover" loading="lazy" />
             <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, transparent 30%, #12121a)' }} />
           </div>
         ) : poster ? (
           <div className="relative" style={{ height: '200px' }}>
-            <img src={poster} alt={title} className="w-full h-full object-cover" style={{ objectPosition: 'top' }} />
+            <img src={poster} alt={title} className="w-full h-full object-cover" style={{ objectPosition: 'top' }} loading="lazy" />
             <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, transparent 30%, #12121a)' }} />
           </div>
         ) : null}
@@ -347,7 +347,7 @@ export default function MovieDetailPopup({
                   <div key={actor.id} className="flex-shrink-0 text-center" style={{ width: '60px' }}>
                     <div className="w-12 h-12 rounded-full overflow-hidden mx-auto mb-1" style={{ background: '#1e293b' }}>
                       {actor.profile_path ? (
-                        <img src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`} alt={actor.name} className="w-full h-full object-cover" />
+                        <img src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`} alt={actor.name} className="w-full h-full object-cover" loading="lazy" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center" style={{ color: '#475569', fontSize: '18px' }}>👤</div>
                       )}
@@ -368,7 +368,7 @@ export default function MovieDetailPopup({
                 {enriched.collection_movies.map(cm => (
                   <div key={cm.id} className="flex-shrink-0 rounded-lg overflow-hidden" style={{ width: '70px', background: '#0f172a', border: cm.id === movieId ? '2px solid #f59e0b' : '2px solid transparent' }}>
                     {cm.poster_path ? (
-                      <img src={`https://image.tmdb.org/t/p/w185${cm.poster_path}`} alt={cm.title} className="w-full object-cover" style={{ height: '105px' }} />
+                      <img src={`https://image.tmdb.org/t/p/w185${cm.poster_path}`} alt={cm.title} className="w-full object-cover" style={{ height: '105px' }} loading="lazy" />
                     ) : (
                       <div style={{ height: '105px', background: 'linear-gradient(135deg, #1a1a2e, #16213e)' }} />
                     )}
