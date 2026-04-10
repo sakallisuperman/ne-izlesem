@@ -1,5 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
+import { fetchCached } from '@/lib/tmdbCache'
 
 export interface FilmNavItem {
   movieId: number
@@ -23,7 +26,6 @@ interface CreditItem {
   backdrop_path: string | null
   overview: string | null
   release_date: string
-  first_air_date: string
   vote_average: number
 }
 
@@ -48,59 +50,102 @@ function formatDate(d: string | null): string | null {
   const parts = d.split('-')
   const months = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara']
   const y = parts[0], m = parseInt(parts[1]) - 1, day = parts[2]
+  if (isNaN(m) || m < 0 || m > 11) return d
   return `${day} ${months[m]} ${y}`
+}
+
+function dedupeById(items: CreditItem[]): CreditItem[] {
+  const seen = new Map<number, CreditItem>()
+  for (const item of items) {
+    if (!seen.has(item.id)) seen.set(item.id, item)
+  }
+  return Array.from(seen.values())
 }
 
 export default function PersonPopup({
   personId, personName, personProfile,
   onClose, onSelectFilm, zIndex = 50,
 }: PersonPopupProps) {
+  const { user } = useAuth()
   const [detail, setDetail] = useState<PersonDetail | null>(null)
-  const [credits, setCredits] = useState<CreditItem[] | null>(null)
+  const [movies, setMovies] = useState<CreditItem[] | null>(null)
+  const [tvShows, setTvShows] = useState<CreditItem[] | null>(null)
   const [bioExpanded, setBioExpanded] = useState(false)
+  const [isFavorite, setIsFavorite] = useState(false)
+  const [favLoading, setFavLoading] = useState(false)
 
   useEffect(() => {
     document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = 'auto' }
+    return () => { document.body.style.overflow = '' }
   }, [])
 
+  // Favori durumu kontrol et
+  useEffect(() => {
+    if (!user) return
+    supabase.from('favorite_actors')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('actor_id', personId)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setIsFavorite(true) })
+  }, [user, personId])
+
+  // Oyuncu detayı + filmografi paralel çek
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
     Promise.all([
-      fetch(`https://api.themoviedb.org/3/person/${personId}?api_key=${apiKey}&language=tr-TR`).then(r => r.json()),
-      fetch(`https://api.themoviedb.org/3/person/${personId}/combined_credits?api_key=${apiKey}&language=tr-TR`).then(r => r.json()),
-    ]).then(([personData, creditsData]) => {
+      fetchCached(`https://api.themoviedb.org/3/person/${personId}?api_key=${apiKey}&language=tr-TR`) as Promise<any>,
+      fetchCached(`https://api.themoviedb.org/3/person/${personId}/movie_credits?api_key=${apiKey}&language=tr-TR`) as Promise<any>,
+      fetchCached(`https://api.themoviedb.org/3/person/${personId}/tv_credits?api_key=${apiKey}&language=tr-TR`) as Promise<any>,
+    ]).then(([personData, movieCredits, tvCredits]) => {
       setDetail({
         biography: personData.biography || null,
         birthday: personData.birthday || null,
         place_of_birth: personData.place_of_birth || null,
         profile_path: personData.profile_path || null,
       })
-      // Sadece oyunculuk (cast), en yeniden eskiye sırala, tüm öğeleri göster
-      const cast: CreditItem[] = (creditsData.cast || [])
-        .filter((c: any) => c.media_type === 'movie' || c.media_type === 'tv')
-        .sort((a: any, b: any) => {
-          const dateA = a.release_date || a.first_air_date || ''
-          const dateB = b.release_date || b.first_air_date || ''
-          return dateB.localeCompare(dateA)
-        })
+
+      // Filmler: sadece cast, dedup by id, filtrele, en yeni en üstte
+      const rawMovies: CreditItem[] = (movieCredits.cast || [])
+        .filter((c: any) => !c.adult && (c.vote_average || 0) > 0)
         .map((c: any) => ({
           id: c.id,
-          media_type: c.media_type,
-          title: c.title || c.name || c.original_title || c.original_name || '',
-          original_title: c.original_title || c.original_name || c.title || c.name || '',
+          media_type: 'movie' as const,
+          title: c.title || c.original_title || '',
+          original_title: c.original_title || c.title || '',
           character: c.character || '',
           poster_path: c.poster_path || null,
           backdrop_path: c.backdrop_path || null,
           overview: c.overview || null,
-          release_date: c.release_date || c.first_air_date || '',
-          first_air_date: c.first_air_date || '',
+          release_date: c.release_date || '',
           vote_average: c.vote_average || 0,
         }))
-      setCredits(cast)
+      const dedupedMovies = dedupeById(rawMovies)
+        .sort((a, b) => (b.release_date || '').localeCompare(a.release_date || ''))
+      setMovies(dedupedMovies)
+
+      // Diziler: sadece cast, dedup by id, filtrele, en yeni en üstte
+      const rawTv: CreditItem[] = (tvCredits.cast || [])
+        .filter((c: any) => !c.adult && (c.vote_average || 0) > 0)
+        .map((c: any) => ({
+          id: c.id,
+          media_type: 'tv' as const,
+          title: c.name || c.original_name || '',
+          original_title: c.original_name || c.name || '',
+          character: c.character || '',
+          poster_path: c.poster_path || null,
+          backdrop_path: c.backdrop_path || null,
+          overview: c.overview || null,
+          release_date: c.first_air_date || '',
+          vote_average: c.vote_average || 0,
+        }))
+      const dedupedTv = dedupeById(rawTv)
+        .sort((a, b) => (b.release_date || '').localeCompare(a.release_date || ''))
+      setTvShows(dedupedTv)
     }).catch(() => {
       setDetail({ biography: null, birthday: null, place_of_birth: null, profile_path: null })
-      setCredits([])
+      setMovies([])
+      setTvShows([])
     })
   }, [personId])
 
@@ -119,12 +164,83 @@ export default function PersonPopup({
     })
   }
 
+  const toggleFavorite = async () => {
+    if (!user || favLoading) return
+    setFavLoading(true)
+    if (isFavorite) {
+      await supabase.from('favorite_actors')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('actor_id', personId)
+      setIsFavorite(false)
+    } else {
+      const profilePath = detail?.profile_path || personProfile || null
+      await supabase.from('favorite_actors').insert({
+        user_id: user.id,
+        actor_id: personId,
+        actor_name: personName,
+        profile_path: profilePath,
+      })
+      setIsFavorite(true)
+    }
+    setFavLoading(false)
+  }
+
   const profileUrl = detail?.profile_path
     ? `https://image.tmdb.org/t/p/w300${detail.profile_path}`
     : personProfile || null
 
   const bio = detail?.biography || ''
   const bioShort = bio.length > 200
+  const totalCount = (movies?.length || 0) + (tvShows?.length || 0)
+
+  const renderGrid = (items: CreditItem[]) => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+      {items.map((c, idx) => (
+        <button
+          key={`${c.media_type}-${c.id}-${idx}`}
+          onClick={() => handleFilmClick(c)}
+          disabled={!onSelectFilm}
+          style={{
+            background: '#0f172a',
+            border: '1px solid rgba(255,255,255,0.06)',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            cursor: onSelectFilm ? 'pointer' : 'default',
+            textAlign: 'left',
+            padding: 0,
+            transition: 'transform 0.15s',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+          onMouseEnter={e => { if (onSelectFilm) e.currentTarget.style.transform = 'scale(1.03)' }}
+          onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+        >
+          <div style={{ position: 'relative', paddingBottom: '150%', width: '100%' }}>
+            {c.poster_path ? (
+              <img
+                src={`https://image.tmdb.org/t/p/w185${c.poster_path}`}
+                alt={c.title}
+                loading="lazy"
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            ) : (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #1a1a2e, #16213e)', fontSize: '24px' }}>
+                🎬
+              </div>
+            )}
+          </div>
+          <div style={{ padding: '6px' }}>
+            <p style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 500, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{c.title}</p>
+            <p style={{ color: '#475569', fontSize: '8px', marginTop: '2px' }}>{c.release_date?.substring(0, 4)}</p>
+            {c.character && (
+              <p style={{ color: '#7F77DD', fontSize: '8px', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.character}</p>
+            )}
+          </div>
+        </button>
+      ))}
+    </div>
+  )
 
   return (
     <div
@@ -144,7 +260,7 @@ export default function PersonPopup({
         }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Kapat butonu */}
+        {/* Kapat */}
         <button
           onClick={onClose}
           style={{
@@ -159,10 +275,10 @@ export default function PersonPopup({
 
         <div style={{ padding: '24px' }}>
           {/* Profil */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '16px' }}>
             <div style={{ width: '120px', height: '120px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #7F77DD', marginBottom: '12px', flexShrink: 0, background: '#1e293b' }}>
               {profileUrl ? (
-                <img src={profileUrl} alt={personName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+                <img src={profileUrl} alt={`${personName} profil fotoğrafı`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
               ) : (
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px' }}>👤</div>
               )}
@@ -171,10 +287,31 @@ export default function PersonPopup({
             <span style={{ marginTop: '6px', fontSize: '11px', padding: '3px 12px', borderRadius: '999px', fontWeight: 600, background: '#7F77DD22', color: '#7F77DD', border: '1px solid #7F77DD44' }}>
               Oyuncu
             </span>
+            {/* Favori butonu */}
+            {user && (
+              <button
+                onClick={toggleFavorite}
+                disabled={favLoading}
+                style={{
+                  marginTop: '10px',
+                  padding: '6px 16px',
+                  borderRadius: '999px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  background: isFavorite ? '#f59e0b22' : '#ffffff10',
+                  color: isFavorite ? '#f59e0b' : '#94a3b8',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {isFavorite ? '💛 Favorilerde' : '❤️ Favorilere Ekle'}
+              </button>
+            )}
           </div>
 
           {/* Bilgi kartları */}
-          {detail && (detail.birthday || detail.place_of_birth || credits) && (
+          {detail && (detail.birthday || detail.place_of_birth || movies !== null) && (
             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
               {detail.birthday && (
                 <div style={{ flex: 1, minWidth: '100px', background: '#0f172a', borderRadius: '10px', padding: '8px 10px', textAlign: 'center' }}>
@@ -188,10 +325,10 @@ export default function PersonPopup({
                   <p style={{ color: '#cbd5e1', fontSize: '11px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detail.place_of_birth}</p>
                 </div>
               )}
-              {credits !== null && (
+              {movies !== null && (
                 <div style={{ flex: 1, minWidth: '80px', background: '#0f172a', borderRadius: '10px', padding: '8px 10px', textAlign: 'center' }}>
                   <p style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>YAPIM</p>
-                  <p style={{ color: '#f59e0b', fontSize: '14px', fontWeight: 700 }}>{credits.length}+</p>
+                  <p style={{ color: '#f59e0b', fontSize: '14px', fontWeight: 700 }}>{totalCount}+</p>
                 </div>
               )}
             </div>
@@ -215,62 +352,35 @@ export default function PersonPopup({
             </div>
           )}
 
-          {/* Filmografi */}
-          <p style={{ color: '#64748b', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', marginBottom: '10px' }}>FİLMOGRAFİ</p>
-          {credits === null ? (
+          {/* Filmler */}
+          {movies === null ? (
             <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', padding: '32px 0' }}>
               {[0, 1, 2].map(i => (
                 <div key={i} className="animate-bounce" style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#7F77DD', animationDelay: `${i * 150}ms` }} />
               ))}
             </div>
-          ) : credits.length === 0 ? (
-            <p style={{ color: '#64748b', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>Filmografi bulunamadı.</p>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-              {credits.map((c, idx) => (
-                <button
-                  key={`${c.media_type}-${c.id}-${idx}`}
-                  onClick={() => handleFilmClick(c)}
-                  disabled={!onSelectFilm}
-                  style={{
-                    background: '#0f172a',
-                    border: '1px solid rgba(255,255,255,0.06)',
-                    borderRadius: '8px',
-                    overflow: 'hidden',
-                    cursor: onSelectFilm ? 'pointer' : 'default',
-                    textAlign: 'left',
-                    padding: 0,
-                    transition: 'transform 0.15s',
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                  onMouseEnter={e => { if (onSelectFilm) e.currentTarget.style.transform = 'scale(1.03)' }}
-                  onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
-                >
-                  <div style={{ position: 'relative', paddingBottom: '150%', width: '100%' }}>
-                    {c.poster_path ? (
-                      <img
-                        src={`https://image.tmdb.org/t/p/w185${c.poster_path}`}
-                        alt={c.title}
-                        loading="lazy"
-                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #1a1a2e, #16213e)', fontSize: '24px' }}>
-                        🎬
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ padding: '6px' }}>
-                    <p style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 500, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{c.title}</p>
-                    <p style={{ color: '#475569', fontSize: '8px', marginTop: '2px' }}>{c.release_date?.substring(0, 4)}</p>
-                    {c.character && (
-                      <p style={{ color: '#7F77DD', fontSize: '8px', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.character}</p>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
+            <>
+              {movies.length > 0 && (
+                <div style={{ marginBottom: '20px' }}>
+                  <p style={{ color: '#64748b', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', marginBottom: '10px' }}>
+                    FİLMLER ({movies.length})
+                  </p>
+                  {renderGrid(movies)}
+                </div>
+              )}
+              {tvShows !== null && tvShows.length > 0 && (
+                <div>
+                  <p style={{ color: '#64748b', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', marginBottom: '10px' }}>
+                    DİZİLER ({tvShows.length})
+                  </p>
+                  {renderGrid(tvShows)}
+                </div>
+              )}
+              {movies.length === 0 && (!tvShows || tvShows.length === 0) && (
+                <p style={{ color: '#64748b', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>Filmografi bulunamadı.</p>
+              )}
+            </>
           )}
         </div>
       </div>

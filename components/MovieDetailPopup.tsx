@@ -5,6 +5,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { getFilmAwards } from '@/lib/awards'
 import PersonPopup from '@/components/PersonPopup'
 import type { FilmNavItem } from '@/components/PersonPopup'
+import { formatDateTR } from '@/lib/utils'
+import { fetchCached } from '@/lib/tmdbCache'
 
 interface CastMember {
   id: number
@@ -142,6 +144,14 @@ export default function MovieDetailPopup({
     ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)
     : null
 
+  // Body scroll kilidi
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = '' }
+    }
+  }, [isOpen])
+
   // Popup kapandığında/sıfırlandığında navStack temizle
   useEffect(() => {
     if (!isOpen) {
@@ -159,14 +169,11 @@ export default function MovieDetailPopup({
     const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
     const fetchAll = async () => {
       try {
-        const [detailsRes, creditsRes, videosRes, providersRes] = await Promise.all([
-          fetch(`https://api.themoviedb.org/3/${currentMediaType}/${currentMovieId}?api_key=${apiKey}&language=tr-TR`),
-          fetch(`https://api.themoviedb.org/3/${currentMediaType}/${currentMovieId}/credits?api_key=${apiKey}&language=tr-TR`),
-          fetch(`https://api.themoviedb.org/3/${currentMediaType}/${currentMovieId}/videos?api_key=${apiKey}`),
-          fetch(`https://api.themoviedb.org/3/${currentMediaType}/${currentMovieId}/watch/providers?api_key=${apiKey}`),
-        ])
         const [details, credits, videos, providersData] = await Promise.all([
-          detailsRes.json(), creditsRes.json(), videosRes.json(), providersRes.json(),
+          fetchCached(`https://api.themoviedb.org/3/${currentMediaType}/${currentMovieId}?api_key=${apiKey}&language=tr-TR`) as Promise<any>,
+          fetchCached(`https://api.themoviedb.org/3/${currentMediaType}/${currentMovieId}/credits?api_key=${apiKey}&language=tr-TR`) as Promise<any>,
+          fetchCached(`https://api.themoviedb.org/3/${currentMediaType}/${currentMovieId}/videos?api_key=${apiKey}`) as Promise<any>,
+          fetchCached(`https://api.themoviedb.org/3/${currentMediaType}/${currentMovieId}/watch/providers?api_key=${apiKey}`) as Promise<any>,
         ])
         const trProviders: string[] = (providersData?.results?.TR?.flatrate || [])
           .map((p: any) => p.provider_name as string)
@@ -180,8 +187,7 @@ export default function MovieDetailPopup({
         let collection_movies: CollectionMovie[] = []
         if (details.belongs_to_collection?.id) {
           try {
-            const colRes = await fetch(`https://api.themoviedb.org/3/collection/${details.belongs_to_collection.id}?api_key=${apiKey}&language=tr-TR`)
-            const colData = await colRes.json()
+            const colData = await fetchCached(`https://api.themoviedb.org/3/collection/${details.belongs_to_collection.id}?api_key=${apiKey}&language=tr-TR`) as any
             collection_name = colData.name || null
             collection_movies = (colData.parts || [])
               .sort((a: any, b: any) => (a.release_date || '').localeCompare(b.release_date || ''))
@@ -325,7 +331,7 @@ export default function MovieDetailPopup({
   const handleShare = async () => {
     const shareTitle = currentTitle
     const text = `"${shareTitle}" ${contentType === 'dizi' ? 'dizisini' : 'filmini'} izlemelisin! 🎬`
-    const url = 'https://ne-izlesemapp.vercel.app'
+    const url = `https://ne-izlesemapp.vercel.app/film/${encodeURIComponent(shareTitle)}`
     try {
       if (typeof navigator !== 'undefined' && navigator.share) {
         await navigator.share({ title: shareTitle, text, url })
@@ -485,7 +491,8 @@ export default function MovieDetailPopup({
             </div>
 
             <div className="flex flex-wrap gap-3 mb-1 text-sm" style={{ color: '#94a3b8' }}>
-              {displayYear && <span>📅 {displayYear}</span>}
+              {currentReleaseDate && <span>{formatDateTR(currentReleaseDate)}</span>}
+              {!currentReleaseDate && displayYear && <span>{displayYear}</span>}
               {displayRating != null && displayRating > 0 && <span>⭐ {typeof displayRating === 'number' ? displayRating.toFixed(1) : displayRating}</span>}
               {enriched?.director && <span>🎬 {enriched.director}</span>}
               {avgRating && <span style={{ color: '#f59e0b' }}>💬 {avgRating} ({reviews.length})</span>}

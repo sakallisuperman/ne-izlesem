@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
+import MovieDetailPopup from '@/components/MovieDetailPopup'
 
 interface Recommendation {
   title: string
@@ -19,6 +20,10 @@ interface Recommendation {
 interface TMDBResult {
   poster_path: string | null
   trailer_key: string | null
+  tmdb_id: number | null
+  backdrop: string | null
+  overview: string | null
+  media_type: 'movie' | 'tv'
 }
 
 async function fetchTMDB(title: string, type: string): Promise<TMDBResult> {
@@ -29,7 +34,7 @@ async function fetchTMDB(title: string, type: string): Promise<TMDBResult> {
   )
   const searchData = await searchRes.json()
   const item = searchData.results?.[0]
-  if (!item) return { poster_path: null, trailer_key: null }
+  if (!item) return { poster_path: null, trailer_key: null, tmdb_id: null, backdrop: null, overview: null, media_type: mediaType }
   const videoRes = await fetch(
     `https://api.themoviedb.org/3/${mediaType}/${item.id}/videos?api_key=${apiKey}`
   )
@@ -38,6 +43,10 @@ async function fetchTMDB(title: string, type: string): Promise<TMDBResult> {
   return {
     poster_path: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null,
     trailer_key: trailer?.key || null,
+    tmdb_id: item.id || null,
+    backdrop: item.backdrop_path ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}` : null,
+    overview: item.overview || null,
+    media_type: mediaType,
   }
 }
 
@@ -123,6 +132,7 @@ export default function Results() {
   const [dislikeLoading, setDislikeLoading] = useState(false)
   const [reminderOpen, setReminderOpen] = useState<string | null>(null) // title
   const [remindedTitles, setRemindedTitles] = useState<Set<string>>(new Set())
+  const [detailPopup, setDetailPopup] = useState<{ rec: Recommendation; tmdb: TMDBResult } | null>(null)
 
   useEffect(() => {
     const answers = JSON.parse(localStorage.getItem('quiz_answers') || '{}')
@@ -185,7 +195,7 @@ export default function Results() {
 
   const shareRec = async (rec: Recommendation, index: number) => {
     const text = `"${rec.title}" ${rec.type === 'dizi' ? 'dizisini' : 'filmini'} izlemelisin! 🎬`
-    const url = 'https://ne-izlesemapp.vercel.app'
+    const url = `https://ne-izlesemapp.vercel.app/film/${encodeURIComponent(rec.title)}`
     try {
       if (typeof navigator !== 'undefined' && navigator.share) {
         await navigator.share({ title: rec.title, text, url })
@@ -243,6 +253,24 @@ export default function Results() {
 
   return (
     <main className="min-h-screen py-12 px-6" style={{ background: '#0a0a0f' }}>
+      {/* Film detay popup */}
+      {detailPopup && (
+        <MovieDetailPopup
+          isOpen
+          onClose={() => setDetailPopup(null)}
+          movieId={detailPopup.tmdb.tmdb_id}
+          mediaType={detailPopup.tmdb.media_type}
+          title={detailPopup.rec.title}
+          turkishTitle={detailPopup.rec.turkish_title !== detailPopup.rec.title ? detailPopup.rec.turkish_title : undefined}
+          poster={detailPopup.tmdb.poster_path}
+          backdrop={detailPopup.tmdb.backdrop}
+          overview={detailPopup.tmdb.overview}
+          voteAverage={detailPopup.rec.imdb}
+          year={detailPopup.rec.year}
+          imdb={detailPopup.rec.imdb}
+          contentType={detailPopup.rec.type === 'film' ? 'film' : 'dizi'}
+        />
+      )}
       {/* Trailer overlay */}
       {activeTrailer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: '#000000cc' }} onClick={() => setActiveTrailer(null)}>
@@ -336,10 +364,10 @@ export default function Results() {
             {displayRecs.map((rec, i) => (
               <div key={`${activeTab}-${i}`} className="rounded-2xl overflow-hidden border" style={{ background: '#12121a', borderColor: '#ffffff15' }}>
                 {displayTmdb[i]?.poster_path && (
-                  <div className="relative">
-                    <img src={displayTmdb[i].poster_path!} alt={rec.title} className="w-full object-cover" style={{ maxHeight: '300px', objectPosition: 'top' }} loading="lazy" />
+                  <div className="relative cursor-pointer" onClick={() => setDetailPopup({ rec, tmdb: displayTmdb[i] })}>
+                    <img src={displayTmdb[i].poster_path!} alt={`${rec.title} posteri`} className="w-full object-cover" style={{ maxHeight: '300px', objectPosition: 'top' }} loading="lazy" />
                     {displayTmdb[i]?.trailer_key && (
-                      <button onClick={() => setActiveTrailer(displayTmdb[i].trailer_key!)} className="absolute inset-0 flex items-center justify-center" style={{ background: '#00000066' }}>
+                      <button onClick={e => { e.stopPropagation(); setActiveTrailer(displayTmdb[i].trailer_key!) }} className="absolute inset-0 flex items-center justify-center" style={{ background: '#00000066' }}>
                         <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: '#f59e0b' }}>
                           <span className="text-2xl ml-1">▶</span>
                         </div>
@@ -349,19 +377,19 @@ export default function Results() {
                 )}
                 <div className="p-6">
                   <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h2 className="text-xl font-bold" style={{ color: '#f1f5f9' }}>{rec.title}</h2>
+                    <button className="text-left flex-1" onClick={() => displayTmdb[i] && setDetailPopup({ rec, tmdb: displayTmdb[i] })}>
+                      <h2 className="text-xl font-bold hover:opacity-80 transition-opacity" style={{ color: '#f1f5f9' }}>{rec.title}</h2>
                       {rec.turkish_title && rec.turkish_title !== rec.title && (
                         <p className="text-sm" style={{ color: '#94a3b8' }}>{rec.turkish_title}</p>
                       )}
-                    </div>
+                    </button>
                     <span className="px-3 py-1 rounded-full text-xs font-semibold ml-3 shrink-0"
                       style={{ background: rec.type === 'film' ? '#f59e0b22' : '#3b82f622', color: rec.type === 'film' ? '#f59e0b' : '#3b82f6', border: `1px solid ${rec.type === 'film' ? '#f59e0b44' : '#3b82f644'}` }}>
                       {rec.type === 'film' ? '🎥 Film' : '📺 Dizi'}
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-3 mb-3 text-sm" style={{ color: '#94a3b8' }}>
-                    <span>📅 {rec.year}</span>
+                    <span>{rec.year}</span>
                     <span>⏱ {rec.duration}</span>
                     <span>⭐ {rec.imdb}</span>
                     {rec.platform && <span>📺 {rec.platform}</span>}

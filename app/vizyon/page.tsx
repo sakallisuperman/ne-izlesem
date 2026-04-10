@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import MovieDetailPopup from '@/components/MovieDetailPopup'
+import { formatDateTR } from '@/lib/utils'
 
 interface Movie {
   id: number
@@ -105,7 +106,7 @@ export default function Vizyon() {
                 )}
                 <div className="px-3 py-2.5">
                   <p className="text-xs font-semibold truncate" style={{ color: '#f1f5f9' }}>{movie.title}</p>
-                  <p className="text-[10px] mt-0.5" style={{ color: '#64748b' }}>{movie.release_date}</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: '#64748b' }}>{formatDateTR(movie.release_date)}</p>
                 </div>
               </button>
             ))}
