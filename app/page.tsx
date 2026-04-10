@@ -43,10 +43,7 @@ export default function Home() {
   const [greeting, setGreeting] = useState('')
   const [reminder, setReminder] = useState<{ id: string; title: string; mood?: string } | null>(null)
 
-  const dailyPicks = [
-    { title: 'Esaretin Bedeli', originalTitle: 'The Shawshank Redemption', year: 1994, imdb: 9.3, type: 'film' },
-    { title: 'Breaking Bad', originalTitle: 'Breaking Bad', year: 2008, imdb: 9.5, type: 'dizi' },
-  ]
+  const [dailyPicks, setDailyPicks] = useState<PickDetail[]>([])
 
   // Saat bazlı karşılama
   useEffect(() => {
@@ -88,45 +85,52 @@ export default function Home() {
   useEffect(() => {
     setLoaded(true)
     checkVizyonNotification()
-    fetch('/api/daily-picks').then(r => r.json()).then(async () => {
-      try {
-        const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
-        const kultIds = [603, 550, 238, 120, 13, 155, 680, 27205, 78, 11, 424, 539, 278, 510, 497]
-        const results = await Promise.all(kultIds.map(id => fetch(`https://api.themoviedb.org/3/movie/${id}?api_key=${apiKey}&language=tr-TR`).then(r => r.json()).catch(() => null)))
-        const data = { results: results.filter(Boolean) }
-        setPosters((data.results || []).map((m: any) => m.poster_path ? `https://image.tmdb.org/t/p/w300${m.poster_path}` : '').filter(Boolean))
-      } catch {}
+    const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
+    // Arka plan posterleri
+    try {
+      const kultIds = [603, 550, 238, 120, 13, 155, 680, 27205, 78, 11, 424, 539, 278, 510, 497]
+      Promise.all(kultIds.map(id => fetch(`https://api.themoviedb.org/3/movie/${id}?api_key=${apiKey}&language=tr-TR`).then(r => r.json()).catch(() => null)))
+        .then(results => setPosters(results.filter(Boolean).map((m: any) => m.poster_path ? `https://image.tmdb.org/t/p/w300${m.poster_path}` : '').filter(Boolean)))
+    } catch {}
+    // Dinamik günün seçimi — TMDB trending
+    Promise.all([
+      fetch(`https://api.themoviedb.org/3/trending/movie/day?api_key=${apiKey}&language=tr-TR`).then(r => r.json()),
+      fetch(`https://api.themoviedb.org/3/trending/tv/day?api_key=${apiKey}&language=tr-TR`).then(r => r.json()),
+    ]).then(([movieData, tvData]) => {
+      const m = movieData.results?.[0]
+      const t = tvData.results?.[0]
+      if (m && t) {
+        setDailyPicks([
+          {
+            title: m.original_title || m.title || '',
+            turkish_title: m.title || '',
+            type: 'film',
+            year: parseInt(m.release_date?.substring(0, 4) || '0') || 0,
+            imdb: Math.round((m.vote_average || 0) * 10) / 10,
+            poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
+            backdrop: m.backdrop_path ? `https://image.tmdb.org/t/p/w780${m.backdrop_path}` : null,
+            overview: m.overview || null,
+            tmdbId: m.id || null,
+            mediaType: 'movie',
+          },
+          {
+            title: t.original_name || t.name || '',
+            turkish_title: t.name || '',
+            type: 'dizi',
+            year: parseInt(t.first_air_date?.substring(0, 4) || '0') || 0,
+            imdb: Math.round((t.vote_average || 0) * 10) / 10,
+            poster: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : null,
+            backdrop: t.backdrop_path ? `https://image.tmdb.org/t/p/w780${t.backdrop_path}` : null,
+            overview: t.overview || null,
+            tmdbId: t.id || null,
+            mediaType: 'tv',
+          },
+        ])
+      }
     }).catch(() => {})
     fetch('/api/stats').then(r => r.json()).then(setStats).catch(() => {})
     fetch('/api/popular').then(r => r.json()).then(d => setPopularMovies(d.movies || [])).catch(() => {})
   }, [])
-
-  const openDetail = async (pick: typeof dailyPicks[0]) => {
-    const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
-    const mediaType: 'movie' | 'tv' = pick.type === 'film' ? 'movie' : 'tv'
-    try {
-      const searchRes = await fetch(`https://api.themoviedb.org/3/search/${mediaType}?api_key=${apiKey}&query=${encodeURIComponent(pick.originalTitle)}&language=tr-TR`)
-      const searchData = await searchRes.json()
-      const item = searchData.results?.[0]
-      setPopup({
-        title: pick.originalTitle,
-        turkish_title: pick.title,
-        type: pick.type,
-        year: pick.year,
-        imdb: pick.imdb,
-        poster: item?.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null,
-        backdrop: item?.backdrop_path ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}` : null,
-        overview: item?.overview || null,
-        tmdbId: item?.id || null,
-        mediaType,
-      })
-    } catch {
-      setPopup({
-        title: pick.originalTitle, turkish_title: pick.title, type: pick.type,
-        year: pick.year, imdb: pick.imdb, poster: null, backdrop: null, overview: null, tmdbId: null, mediaType,
-      })
-    }
-  }
 
   return (
     <main className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: '#0a0a0f' }}>
@@ -189,36 +193,31 @@ export default function Home() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="#94a3b8" stroke="none"/></svg>
             Takip Et
           </a>
-          <div className="flex items-center gap-2">
-            <NotificationBell />
-            <Link href="/profile" className="text-xs font-medium transition-opacity hover:opacity-80" style={{ color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)', padding: '5px 14px', borderRadius: '20px', background: 'rgba(245,158,11,0.08)' }}>
-              {user ? 'Hoş geldin, ' + (user.user_metadata?.full_name || user.email || 'Profil').split(' ')[0] : 'Giriş Yap'}
-            </Link>
-          </div>
+          <NotificationBell />
         </div>
         <div className="flex-1 flex flex-col items-center justify-center" style={{ marginTop: '-20px' }}>
           <div className={loaded ? 'text-center mb-10 transition-all duration-700 opacity-100 translate-y-0' : 'text-center mb-10 transition-all duration-700 opacity-0 translate-y-4'}>
+            {greeting && <p className="mb-3 text-xs" style={{ color: '#ffffff30', fontSize: '12px' }}>{greeting}</p>}
             <div className="text-6xl mb-4">🎬</div>
             <h1 className="text-5xl font-bold mb-4" style={{ color: '#f59e0b', letterSpacing: '-1px' }}>Ne İzlesem?</h1>
-            {greeting && (
-              <p className="text-sm font-medium mb-2 px-4 py-2 rounded-full inline-block" style={{ color: '#f59e0b', background: '#f59e0b15', border: '1px solid #f59e0b22' }}>{greeting}</p>
-            )}
             <p className="text-xl" style={{ color: '#94a3b8', lineHeight: 1.6 }}>Ruh haline göre sana özel<br /><span style={{ color: '#cbd5e1', fontWeight: 500 }}>film ve dizi önerileri</span></p>
           </div>
-          <div className={loaded ? 'mb-6 transition-all duration-700 delay-100 opacity-100 translate-y-0' : 'mb-6 transition-all duration-700 delay-100 opacity-0 translate-y-4'}>
-            <p className="text-center text-[10px] font-semibold mb-2 tracking-widest" style={{ color: '#f59e0b44' }}>GÜNÜN SEÇİMİ</p>
-            <div className="flex gap-2 justify-center">
-              {dailyPicks.map((pick, i) => (
-                <button key={i} onClick={() => openDetail(pick)} className="rounded-lg overflow-hidden border px-3 py-2 text-left transition-all hover:scale-105 active:scale-95" style={{ background: '#12121a', borderColor: 'rgba(255,255,255,0.06)' }}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded" style={{ background: pick.type === 'film' ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.15)', color: pick.type === 'film' ? '#f59e0b' : '#60a5fa' }}>{pick.type === 'film' ? 'Film' : 'Dizi'}</span>
-                    <span className="text-[11px] font-medium" style={{ color: '#e2e8f0' }}>{pick.title}</span>
-                  </div>
-                  <p className="text-[9px] mt-1" style={{ color: '#475569' }}>{pick.year} • ⭐ {pick.imdb}</p>
-                </button>
-              ))}
+          {dailyPicks.length > 0 && (
+            <div className={loaded ? 'mb-6 transition-all duration-700 delay-100 opacity-100 translate-y-0' : 'mb-6 transition-all duration-700 delay-100 opacity-0 translate-y-4'}>
+              <p className="text-center text-[10px] font-semibold mb-2 tracking-widest" style={{ color: '#f59e0b44' }}>GÜNÜN SEÇİMİ</p>
+              <div className="flex gap-2 justify-center">
+                {dailyPicks.map((pick, i) => (
+                  <button key={i} onClick={() => setPopup(pick)} className="rounded-lg overflow-hidden border px-3 py-2 text-left transition-all hover:scale-105 active:scale-95" style={{ background: '#12121a', borderColor: 'rgba(255,255,255,0.06)' }}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded" style={{ background: pick.type === 'film' ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.15)', color: pick.type === 'film' ? '#f59e0b' : '#60a5fa' }}>{pick.type === 'film' ? 'Film' : 'Dizi'}</span>
+                      <span className="text-[11px] font-medium" style={{ color: '#e2e8f0' }}>{pick.turkish_title || pick.title}</span>
+                    </div>
+                    <p className="text-[9px] mt-1" style={{ color: '#475569' }}>{pick.year} • ⭐ {pick.imdb}</p>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           {popularMovies.length > 0 && (
             <div className={loaded ? 'w-full mb-6 transition-all duration-700 delay-150 opacity-100 translate-y-0' : 'w-full mb-6 transition-all duration-700 delay-150 opacity-0 translate-y-4'}>
               <p className="text-center text-[10px] font-semibold mb-2 tracking-widest" style={{ color: '#f59e0b44' }}>🔥 EN ÇOK İZLENENLER</p>

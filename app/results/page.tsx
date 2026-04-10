@@ -66,7 +66,12 @@ function saveReminder(title: string, opt: 'tonight' | 'tomorrow' | 'weekend', mo
   localStorage.setItem(key, JSON.stringify(list))
 }
 
-const DISLIKE_REASONS = ['Çok uzundu', 'Çok ağırdı', 'Konu ilgimi çekmedi', 'Zaten izledim']
+const DISLIKE_REASONS = [
+  'Daha kısa filmler istiyorum ⏱️',
+  'Daha hafif/eğlenceli istiyorum 😊',
+  'Farklı türde keşfetmek istiyorum 🎭',
+  'Bunları zaten izledim ✅',
+]
 
 const REMINDER_OPTIONS: { key: 'tonight' | 'tomorrow' | 'weekend'; label: string }[] = [
   { key: 'tonight', label: 'Bu akşam' },
@@ -252,7 +257,7 @@ export default function Results() {
       {dislikeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.8)' }} onClick={() => !dislikeLoading && setDislikeModal(false)}>
           <div className="w-full max-w-sm rounded-2xl p-6 border" style={{ background: '#12121a', borderColor: '#ffffff15' }} onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-1" style={{ color: '#f1f5f9' }}>Ne eksikti? 🤔</h3>
+            <h3 className="text-lg font-bold mb-1" style={{ color: '#f1f5f9' }}>Ne arıyorsun? 🎯</h3>
             <p className="text-xs mb-4" style={{ color: '#64748b' }}>Seç, sana daha uygun öneriler getirelim.</p>
             <div className="flex flex-col gap-2 mb-5">
               {DISLIKE_REASONS.map(reason => {
@@ -449,7 +454,7 @@ export default function Results() {
               className="px-8 py-4 rounded-full font-semibold transition-all hover:scale-105 border"
               style={{ background: 'transparent', color: '#94a3b8', borderColor: '#ffffff20' }}
             >
-              Beğenmedim 👎
+              🔄 Farklı Öneriler Keşfet
             </button>
           )}
           <button onClick={() => router.push('/quiz')}

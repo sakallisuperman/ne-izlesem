@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import MovieDetailPopup from '@/components/MovieDetailPopup'
 
 /* ─── Tipler ─── */
@@ -39,39 +39,81 @@ interface CreditItem {
   popularity: number
 }
 
+/* ─── TMDB sonuçlarını normalize eden yardımcı ─── */
+function mapResults(raw: any[]): AnyResult[] {
+  // Kişileri isme göre dedup — en yüksek popularity'i tut
+  const personsByName = new Map<string, any>()
+  for (const r of raw) {
+    if (r.media_type === 'person') {
+      const existing = personsByName.get(r.name)
+      if (!existing || (r.popularity || 0) > (existing.popularity || 0)) {
+        personsByName.set(r.name, r)
+      }
+    }
+  }
+  const uniquePersonIds = new Set(Array.from(personsByName.values()).map((p: any) => p.id))
+
+  return raw.flatMap((r: any): AnyResult[] => {
+    if (r.media_type === 'movie' || r.media_type === 'tv') {
+      return [{
+        kind: 'media',
+        id: r.id,
+        media_type: r.media_type,
+        title: r.title || r.name || '',
+        original_title: r.original_title || r.original_name || '',
+        poster: r.poster_path ? `https://image.tmdb.org/t/p/w500${r.poster_path}` : null,
+        backdrop: r.backdrop_path ? `https://image.tmdb.org/t/p/w780${r.backdrop_path}` : null,
+        overview: r.overview || null,
+        release_date: r.release_date || r.first_air_date || '',
+        vote_average: r.vote_average || 0,
+      }]
+    }
+    if (r.media_type === 'person' && uniquePersonIds.has(r.id)) {
+      return [{
+        kind: 'person',
+        id: r.id,
+        name: r.name || '',
+        profile: r.profile_path ? `https://image.tmdb.org/t/p/w185${r.profile_path}` : null,
+        known_for_department: r.known_for_department || '',
+      }]
+    }
+    return []
+  })
+}
+
 /* ─── Oyuncu Popup ─── */
 function PersonPopup({ person, onClose }: { person: PersonResult; onClose: () => void }) {
   const [credits, setCredits] = useState<CreditItem[] | null>(null)
   const [detail, setDetail] = useState<MovieResult | null>(null)
 
-  const loadCredits = useCallback(async () => {
-    if (credits !== null) return
-    try {
-      const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
-      const res = await fetch(
-        `https://api.themoviedb.org/3/person/${person.id}/combined_credits?api_key=${apiKey}&language=tr-TR`
-      )
-      const data = await res.json()
-      const cast: CreditItem[] = (data.cast || [])
-        .filter((c: any) => c.media_type === 'movie' || c.media_type === 'tv')
-        .sort((a: any, b: any) => (b.popularity || 0) - (a.popularity || 0))
-        .slice(0, 30)
-      setCredits(cast)
-    } catch {
-      setCredits([])
-    }
-  }, [person.id, credits])
+  // Body scroll kilidi
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
 
-  // Popup açılınca hemen yükle
-  useState(() => { loadCredits() })
+  // Filmografiyi yükle
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
+    fetch(`https://api.themoviedb.org/3/person/${person.id}/combined_credits?api_key=${apiKey}&language=tr-TR`)
+      .then(r => r.json())
+      .then(data => {
+        const cast: CreditItem[] = (data.cast || [])
+          .filter((c: any) => c.media_type === 'movie' || c.media_type === 'tv')
+          .sort((a: any, b: any) => (b.popularity || 0) - (a.popularity || 0))
+          .slice(0, 30)
+        setCredits(cast)
+      })
+      .catch(() => setCredits([]))
+  }, [person.id])
 
   const openCredit = (c: CreditItem) => {
     setDetail({
       kind: 'media',
       id: c.id,
       media_type: c.media_type,
-      title: c.title,
-      original_title: c.original_title,
+      title: c.title || c.original_title || '',
+      original_title: c.original_title || c.title || '',
       poster: c.poster_path ? `https://image.tmdb.org/t/p/w500${c.poster_path}` : null,
       backdrop: c.backdrop_path ? `https://image.tmdb.org/t/p/w780${c.backdrop_path}` : null,
       overview: c.overview || null,
@@ -82,7 +124,6 @@ function PersonPopup({ person, onClose }: { person: PersonResult; onClose: () =>
 
   return (
     <>
-      {/* Overlay */}
       <div
         className="fixed inset-0 z-40 flex items-end justify-center"
         style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
@@ -93,17 +134,19 @@ function PersonPopup({ person, onClose }: { person: PersonResult; onClose: () =>
           style={{ background: '#12121a', maxHeight: '90vh' }}
           onClick={e => e.stopPropagation()}
         >
-          {/* Kapat */}
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-sm z-10"
-            style={{ background: '#00000066', color: '#fff', position: 'sticky', float: 'right', marginTop: '12px', marginRight: '12px' }}
-          >✕</button>
+          {/* Kapat butonu */}
+          <div className="sticky top-0 z-10 flex justify-end pt-4 pr-4" style={{ background: '#12121a' }}>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-sm"
+              style={{ background: '#1e293b', color: '#94a3b8' }}
+            >✕</button>
+          </div>
 
-          <div className="p-6">
+          <div className="px-6 pb-8">
             {/* Profil fotoğrafı + isim */}
             <div className="flex flex-col items-center mb-6">
-              <div className="w-28 h-28 rounded-full overflow-hidden mb-4 border-2" style={{ borderColor: '#7F77DD', flexShrink: 0 }}>
+              <div className="w-28 h-28 rounded-full overflow-hidden mb-4 border-2" style={{ borderColor: '#7F77DD' }}>
                 {person.profile ? (
                   <img src={person.profile} alt={person.name} className="w-full h-full object-cover" loading="lazy" />
                 ) : (
@@ -167,7 +210,6 @@ function PersonPopup({ person, onClose }: { person: PersonResult; onClose: () =>
         </div>
       </div>
 
-      {/* Filmden tıklanınca MovieDetailPopup */}
       {detail && (
         <MovieDetailPopup
           isOpen
@@ -199,6 +241,8 @@ export default function SearchPage() {
   const [searched, setSearched] = useState(false)
   const [selectedMedia, setSelectedMedia] = useState<MovieResult | null>(null)
   const [selectedPerson, setSelectedPerson] = useState<PersonResult | null>(null)
+  const [inputFocused, setInputFocused] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); setSearched(false); return }
@@ -208,33 +252,7 @@ export default function SearchPage() {
       const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
       const res = await fetch(`https://api.themoviedb.org/3/search/multi?api_key=${apiKey}&query=${encodeURIComponent(q)}&language=tr-TR&page=1`)
       const data = await res.json()
-      const mapped: AnyResult[] = (data.results || []).flatMap((r: any): AnyResult[] => {
-        if (r.media_type === 'movie' || r.media_type === 'tv') {
-          return [{
-            kind: 'media',
-            id: r.id,
-            media_type: r.media_type,
-            title: r.title || r.name || '',
-            original_title: r.original_title || r.original_name || '',
-            poster: r.poster_path ? `https://image.tmdb.org/t/p/w500${r.poster_path}` : null,
-            backdrop: r.backdrop_path ? `https://image.tmdb.org/t/p/w780${r.backdrop_path}` : null,
-            overview: r.overview || null,
-            release_date: r.release_date || r.first_air_date || '',
-            vote_average: r.vote_average || 0,
-          }]
-        }
-        if (r.media_type === 'person') {
-          return [{
-            kind: 'person',
-            id: r.id,
-            name: r.name || '',
-            profile: r.profile_path ? `https://image.tmdb.org/t/p/w185${r.profile_path}` : null,
-            known_for_department: r.known_for_department || '',
-          }]
-        }
-        return []
-      })
-      setResults(mapped)
+      setResults(mapResults(data.results || []))
     } catch {
       setResults([])
     } finally {
@@ -251,12 +269,30 @@ export default function SearchPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (debounceTimer) clearTimeout(debounceTimer)
+    setInputFocused(false)
     doSearch(query)
+  }
+
+  const clearSearch = () => {
+    setQuery('')
+    setResults([])
+    setSearched(false)
+    setInputFocused(false)
+    inputRef.current?.focus()
+  }
+
+  // Autocomplete: ilk 5 sonuç, input odaklanmışken göster
+  const showSuggestions = inputFocused && query.length >= 2 && results.length > 0 && !loading
+  const suggestions = results.slice(0, 5)
+
+  const pickSuggestion = (s: AnyResult) => {
+    setInputFocused(false)
+    if (s.kind === 'media') setSelectedMedia(s)
+    else setSelectedPerson(s)
   }
 
   return (
     <main className="min-h-screen pt-6 px-4 pb-24" style={{ background: '#0a0a0f' }}>
-
       {selectedMedia && (
         <MovieDetailPopup
           isOpen
@@ -287,9 +323,12 @@ export default function SearchPage() {
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
             <input
+              ref={inputRef}
               type="text"
               value={query}
               onChange={e => handleInput(e.target.value)}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setTimeout(() => setInputFocused(false), 150)}
               placeholder="Film, dizi veya oyuncu adı yazın..."
               autoFocus
               className="w-full rounded-2xl pl-12 pr-4 py-4 text-base outline-none transition-all"
@@ -298,10 +337,51 @@ export default function SearchPage() {
             {query && (
               <button
                 type="button"
-                onClick={() => { setQuery(''); setResults([]); setSearched(false) }}
+                onClick={clearSearch}
                 className="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-sm"
                 style={{ background: '#1e293b', color: '#64748b' }}
               >✕</button>
+            )}
+
+            {/* Autocomplete dropdown */}
+            {showSuggestions && (
+              <div className="absolute top-full left-0 right-0 mt-1 rounded-xl border overflow-hidden z-20" style={{ background: '#12121a', borderColor: 'rgba(255,255,255,0.08)' }}>
+                {suggestions.map(s => (
+                  <button
+                    key={`sug-${s.kind}-${s.id}`}
+                    onMouseDown={() => pickSuggestion(s)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-white/5 border-b last:border-b-0"
+                    style={{ borderColor: 'rgba(255,255,255,0.06)' }}
+                  >
+                    {s.kind === 'person' ? (
+                      <>
+                        <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0" style={{ background: '#1e293b' }}>
+                          {s.profile
+                            ? <img src={s.profile} alt={s.name} className="w-full h-full object-cover" loading="lazy" />
+                            : <span className="text-xs flex items-center justify-center h-full w-full">👤</span>
+                          }
+                        </div>
+                        <span className="text-xs flex-1 truncate" style={{ color: '#f1f5f9' }}>{s.name}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: '#7F77DD22', color: '#7F77DD' }}>Oyuncu</span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="rounded overflow-hidden flex-shrink-0" style={{ width: '22px', height: '32px', background: '#1e293b' }}>
+                          {s.poster
+                            ? <img src={s.poster} alt={s.title} className="w-full h-full object-cover" loading="lazy" />
+                            : <span className="text-[10px] flex items-center justify-center h-full w-full">🎬</span>
+                          }
+                        </div>
+                        <span className="text-xs flex-1 truncate" style={{ color: '#f1f5f9' }}>{s.title}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0"
+                          style={{ background: s.media_type === 'movie' ? '#f59e0b18' : '#3b82f618', color: s.media_type === 'movie' ? '#f59e0b' : '#60a5fa' }}>
+                          {s.media_type === 'movie' ? 'Film' : 'Dizi'}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         </form>
@@ -318,9 +398,9 @@ export default function SearchPage() {
 
         {!loading && searched && results.length === 0 && (
           <div className="text-center py-16">
-            <p className="text-4xl mb-3">🎬</p>
+            <p className="text-4xl mb-3">🔍</p>
             <p style={{ color: '#94a3b8' }}>Sonuç bulunamadı.</p>
-            <p className="text-sm mt-1" style={{ color: '#475569' }}>Farklı bir arama deneyin.</p>
+            <p className="text-sm mt-1" style={{ color: '#475569' }}>Farklı yazımı deneyin.</p>
           </div>
         )}
 
@@ -357,7 +437,6 @@ export default function SearchPage() {
                 )
               }
 
-              // Film / Dizi kartı
               return (
                 <button
                   key={`${result.media_type}-${result.id}`}
