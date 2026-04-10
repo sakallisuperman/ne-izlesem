@@ -131,7 +131,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: '#0a0a0f' }}>
-      <div className="absolute inset-0 grid grid-cols-4 gap-1 p-1 opacity-[0.12]" style={{ animation: 'bgScroll 60s linear infinite', height: '200%', marginTop: '-50%' }}>
+      <div className="absolute inset-0 grid grid-cols-4 gap-1 p-1 opacity-[0.18]" style={{ animation: 'bgScroll 60s linear infinite', height: '200%', marginTop: '-50%' }}>
         {posters.length > 0 ? posters.map((p, i) => (
           <img key={i} src={p} alt="" className="rounded-lg w-full h-full object-cover" loading="lazy" />
         )) : Array.from({ length: 20 }).map((_, i) => (
