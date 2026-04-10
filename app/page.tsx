@@ -40,11 +40,50 @@ export default function Home() {
   const [popularMovies, setPopularMovies] = useState<PopularMovie[]>([])
   const { user } = useAuth()
   const [popup, setPopup] = useState<PickDetail | null>(null)
+  const [greeting, setGreeting] = useState('')
+  const [reminder, setReminder] = useState<{ id: string; title: string; mood?: string } | null>(null)
 
   const dailyPicks = [
     { title: 'Esaretin Bedeli', originalTitle: 'The Shawshank Redemption', year: 1994, imdb: 9.3, type: 'film' },
     { title: 'Breaking Bad', originalTitle: 'Breaking Bad', year: 2008, imdb: 9.5, type: 'dizi' },
   ]
+
+  // Saat bazlı karşılama
+  useEffect(() => {
+    const h = new Date().getHours()
+    const day = new Date().getDay()
+    const isWeekend = day === 0 || day === 6
+    const firstName = user?.user_metadata?.full_name?.split(' ')[0] || ''
+    const name = firstName ? ` ${firstName}` : ''
+    let msg = ''
+    if (h >= 6 && h < 12)       msg = `Günaydın${name} ☀️ Kahvaltıda ne izlesem?`
+    else if (h >= 12 && h < 17) msg = `İyi öğlenler${name} 🌤️ Mola zamanı!`
+    else if (h >= 17 && h < 21) msg = `İyi akşamlar${name} 🌅 Film zamanı!`
+    else if (h >= 21 || h < 2)  msg = `Gece modu${name} 🌙 Yastık filmi zamanı`
+    else                         msg = `Uykun mu kaçtı?${name} 🦉 Seninle aynı durumda değiliz ama...`
+    if (isWeekend) msg += ' Hafta sonu keyfi!'
+    setGreeting(msg)
+  }, [user])
+
+  // Hatırlatıcı kontrolü
+  useEffect(() => {
+    try {
+      const list = JSON.parse(localStorage.getItem('ne_izlesem_reminders') || '[]')
+      const due = list.find((r: any) => r.reminderTime <= Date.now())
+      if (due) setReminder(due)
+    } catch {}
+  }, [])
+
+  const dismissReminder = (addToWatchlist: boolean) => {
+    if (!reminder) return
+    // localStorage'dan sil
+    try {
+      const list = JSON.parse(localStorage.getItem('ne_izlesem_reminders') || '[]')
+      localStorage.setItem('ne_izlesem_reminders', JSON.stringify(list.filter((r: any) => r.id !== reminder.id)))
+    } catch {}
+    setReminder(null)
+    if (!addToWatchlist) { window.location.href = '/quiz' }
+  }
 
   useEffect(() => {
     setLoaded(true)
@@ -117,6 +156,33 @@ export default function Home() {
         />
       )}
 
+      {/* Hatırlatıcı banner */}
+      {reminder && (
+        <div className="fixed bottom-24 left-4 right-4 z-40 rounded-2xl p-4 border max-w-sm mx-auto" style={{ background: '#12121a', borderColor: '#f59e0b44' }}>
+          <p className="text-xs font-semibold mb-1" style={{ color: '#f59e0b' }}>🔔 İzleme zamanı!</p>
+          <p className="text-sm font-medium mb-3" style={{ color: '#f1f5f9' }}>
+            <span style={{ color: '#f59e0b' }}>{reminder.title}</span> izleme zamanı!
+            {reminder.mood && <span style={{ color: '#64748b' }}> Hâlâ {reminder.mood} misin?</span>}
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => dismissReminder(true)}
+              className="flex-1 py-2 rounded-xl text-xs font-semibold"
+              style={{ background: '#22c55e22', color: '#22c55e', border: '1px solid #22c55e44' }}
+            >
+              Evet, izliyorum ✓
+            </button>
+            <button
+              onClick={() => dismissReminder(false)}
+              className="flex-1 py-2 rounded-xl text-xs font-semibold"
+              style={{ background: '#ffffff08', color: '#94a3b8', border: '1px solid #ffffff15' }}
+            >
+              Hayır, yeni öneri →
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="relative z-10 flex flex-col flex-1 px-6 max-w-lg mx-auto w-full">
         <div className="flex justify-between items-center pt-6 pb-4">
           <a href="https://instagram.com/ne_izlesem" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs transition-opacity hover:opacity-80" style={{ color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)', padding: '5px 12px', borderRadius: '20px' }}>
@@ -134,6 +200,9 @@ export default function Home() {
           <div className={loaded ? 'text-center mb-10 transition-all duration-700 opacity-100 translate-y-0' : 'text-center mb-10 transition-all duration-700 opacity-0 translate-y-4'}>
             <div className="text-6xl mb-4">🎬</div>
             <h1 className="text-5xl font-bold mb-4" style={{ color: '#f59e0b', letterSpacing: '-1px' }}>Ne İzlesem?</h1>
+            {greeting && (
+              <p className="text-sm font-medium mb-2 px-4 py-2 rounded-full inline-block" style={{ color: '#f59e0b', background: '#f59e0b15', border: '1px solid #f59e0b22' }}>{greeting}</p>
+            )}
             <p className="text-xl" style={{ color: '#94a3b8', lineHeight: 1.6 }}>Ruh haline göre sana özel<br /><span style={{ color: '#cbd5e1', fontWeight: 500 }}>film ve dizi önerileri</span></p>
           </div>
           <div className={loaded ? 'mb-6 transition-all duration-700 delay-100 opacity-100 translate-y-0' : 'mb-6 transition-all duration-700 delay-100 opacity-0 translate-y-4'}>

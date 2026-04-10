@@ -50,8 +50,15 @@ Yanıtını SADECE aşağıdaki JSON formatında ver, başka hiçbir şey yazma,
 
 export async function POST(req: NextRequest) {
   try {
-    const { answers, excludeTitles = [] } = await req.json()
-    const userMessage = `Kullanıcının cevapları:
+    const {
+      answers,
+      excludeTitles = [],
+      feedback,
+      previousTitles = [],
+      reverseMode = false,
+    } = await req.json()
+
+    let userMessage = `Kullanıcının cevapları:
 - Ruh hali: ${answers.mood}
 - Ayıracağı zaman: ${answers.time}
 - İstediği deneyim: ${answers.style}
@@ -60,9 +67,27 @@ export async function POST(req: NextRequest) {
 - Dil tercihi: ${answers.language}
 - Kimlerle izliyor: ${answers.company}
 - Platformlar: ${Array.isArray(answers.platform) ? answers.platform.join(', ') : answers.platform}
-- Favori türler: ${Array.isArray(answers.genres) ? answers.genres.join(', ') : answers.genres}
+- Favori türler: ${Array.isArray(answers.genres) ? answers.genres.join(', ') : answers.genres}`
 
-${excludeTitles.length > 0 ? "\nDaha önce izlenen ve ÖNERİLMEMESİ gereken yapımlar: " + excludeTitles.join(", ") + "\n" : ""}Bu kişiye TAM OLARAK 3 film ve 3 dizi öner. Toplamda 6 öneri.
+    if (excludeTitles.length > 0) {
+      userMessage += `\n\nDaha önce izlenen ve ÖNERİLMEMESİ gereken yapımlar: ${excludeTitles.join(', ')}`
+    }
+
+    if (feedback && feedback.length > 0) {
+      userMessage += `\n\nKullanıcı önceki önerileri beğenmedi. Feedback: ${feedback.join(', ')}. Lütfen TAMAMEN FARKLI filmler öner. Önceki öneriler: ${previousTitles.join(', ')}`
+    }
+
+    if (reverseMode) {
+      userMessage += `\n\nKullanıcı şu an "${answers.mood}" hissediyor. Ama ona TAM TERSİ tonda filmler öner ki ruh hali değişsin:
+- Melankolik/Duygusal → İlham verici, umut dolu, komedi
+- Neşeli/Heyecanlı → Derin, düşündüren, sakin
+- Yorgun → Enerjik, adrenalin dolu, kısa
+- Stresli → Rahatlatıcı, sakin, feelgood
+- Canı sıkkın → Şaşırtıcı, beklenmedik, farklı
+Bu TAM TERSİ mod — kullanıcının ruh halini değiştir, sıra dışı seçimler yap.`
+    }
+
+    userMessage += `\n\nBu kişiye TAM OLARAK 3 film ve 3 dizi öner. Toplamda 6 öneri.
 ÖNEMLİ: Mainstream/popüler yapımların yanında mutlaka az bilinen yapımlar da öner.`
 
     const cleaned = await callGroq(userMessage)

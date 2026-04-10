@@ -85,6 +85,8 @@ export default function MovieDetailPopup({
 
   const [copied, setCopied] = useState(false)
   const [badgesMap, setBadgesMap] = useState<Record<string, string>>({})
+  const [reminderOpen, setReminderOpen] = useState(false)
+  const [reminded, setReminded] = useState(false)
 
   // Reviews için canonical title
   const reviewKey = (originalTitle && originalTitle !== title) ? originalTitle : title
@@ -234,6 +236,28 @@ export default function MovieDetailPopup({
     } catch {}
   }
 
+  const handleReminder = (opt: 'tonight' | 'tomorrow' | 'weekend') => {
+    const d = new Date()
+    let ts: number
+    if (opt === 'tonight') {
+      d.setHours(20, 0, 0, 0)
+      if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1)
+      ts = d.getTime()
+    } else if (opt === 'tomorrow') {
+      d.setDate(d.getDate() + 1); d.setHours(20, 0, 0, 0); ts = d.getTime()
+    } else {
+      const dSat = (6 - d.getDay() + 7) % 7 || 7
+      d.setDate(d.getDate() + dSat); d.setHours(20, 0, 0, 0); ts = d.getTime()
+    }
+    try {
+      const list = JSON.parse(localStorage.getItem('ne_izlesem_reminders') || '[]')
+      list.push({ id: Date.now().toString(), title, reminderTime: ts })
+      localStorage.setItem('ne_izlesem_reminders', JSON.stringify(list))
+    } catch {}
+    setReminded(true)
+    setReminderOpen(false)
+  }
+
   if (!isOpen) return null
 
   const displayOriginal = originalTitle && originalTitle !== title ? originalTitle : null
@@ -284,6 +308,31 @@ export default function MovieDetailPopup({
                   {contentType === 'film' ? 'Film' : 'Dizi'}
                 </span>
               )}
+              {/* Hatırlat butonu */}
+              <div className="relative">
+                <button
+                  onClick={() => setReminderOpen(o => !o)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-all text-sm"
+                  style={{ background: reminded ? '#f59e0b22' : '#ffffff12', color: reminded ? '#f59e0b' : '#94a3b8' }}
+                  title="Hatırlat"
+                >
+                  {reminded ? '✓' : '⏰'}
+                </button>
+                {reminderOpen && (
+                  <div className="absolute top-full right-0 mt-1 rounded-xl overflow-hidden border z-10 min-w-[130px]" style={{ background: '#1e293b', borderColor: '#ffffff15' }}>
+                    {(['tonight', 'tomorrow', 'weekend'] as const).map((opt, idx) => (
+                      <button
+                        key={opt}
+                        onClick={() => handleReminder(opt)}
+                        className="w-full px-3 py-2 text-left text-xs hover:opacity-80 border-b last:border-b-0"
+                        style={{ color: '#f1f5f9', borderColor: '#ffffff10' }}
+                      >
+                        {['Bu akşam', 'Yarın akşam', 'Bu hafta sonu'][idx]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={handleShare}
                 className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
