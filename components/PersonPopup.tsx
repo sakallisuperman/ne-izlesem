@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { fetchCached } from '@/lib/tmdbCache'
+import MovieDetailPopup from '@/components/MovieDetailPopup'
 
 export interface FilmNavItem {
   movieId: number
@@ -27,6 +28,8 @@ interface CreditItem {
   overview: string | null
   release_date: string
   vote_average: number
+  popularity: number
+  vote_count: number
 }
 
 interface PersonDetail {
@@ -62,6 +65,18 @@ function dedupeById(items: CreditItem[]): CreditItem[] {
   return Array.from(seen.values())
 }
 
+/** İlk 3 popüler (popularity DESC), geri kalanlar tarihe göre (release_date DESC) */
+function sortWithTopPopular(items: CreditItem[]): CreditItem[] {
+  if (items.length <= 3) return [...items].sort((a, b) => b.popularity - a.popularity)
+  const byPopularity = [...items].sort((a, b) => b.popularity - a.popularity)
+  const top3 = byPopularity.slice(0, 3)
+  const top3Ids = new Set(top3.map(i => i.id))
+  const rest = items
+    .filter(i => !top3Ids.has(i.id))
+    .sort((a, b) => (b.release_date || '').localeCompare(a.release_date || ''))
+  return [...top3, ...rest]
+}
+
 export default function PersonPopup({
   personId, personName, personProfile,
   onClose, onSelectFilm, zIndex = 50,
@@ -73,6 +88,7 @@ export default function PersonPopup({
   const [bioExpanded, setBioExpanded] = useState(false)
   const [isFavorite, setIsFavorite] = useState(false)
   const [favLoading, setFavLoading] = useState(false)
+  const [internalDetail, setInternalDetail] = useState<FilmNavItem | null>(null)
 
   useEffect(() => {
     document.body.style.overflow = 'hidden'
@@ -105,7 +121,7 @@ export default function PersonPopup({
         profile_path: personData.profile_path || null,
       })
 
-      // Filmler: sadece cast, dedup by id, filtrele, en yeni en üstte
+      // Filmler: sadece cast, dedup by id, filtrele, ilk 3 popular sonra tarihe göre
       const rawMovies: CreditItem[] = (movieCredits.cast || [])
         .filter((c: any) => !c.adult && (c.vote_average || 0) > 0)
         .map((c: any) => ({
@@ -119,12 +135,12 @@ export default function PersonPopup({
           overview: c.overview || null,
           release_date: c.release_date || '',
           vote_average: c.vote_average || 0,
+          popularity: c.popularity || 0,
+          vote_count: c.vote_count || 0,
         }))
-      const dedupedMovies = dedupeById(rawMovies)
-        .sort((a, b) => (b.release_date || '').localeCompare(a.release_date || ''))
-      setMovies(dedupedMovies)
+      setMovies(sortWithTopPopular(dedupeById(rawMovies)))
 
-      // Diziler: sadece cast, dedup by id, filtrele, en yeni en üstte
+      // Diziler: sadece cast, dedup by id, filtrele, ilk 3 popular sonra tarihe göre
       const rawTv: CreditItem[] = (tvCredits.cast || [])
         .filter((c: any) => !c.adult && (c.vote_average || 0) > 0)
         .map((c: any) => ({
@@ -138,10 +154,10 @@ export default function PersonPopup({
           overview: c.overview || null,
           release_date: c.first_air_date || '',
           vote_average: c.vote_average || 0,
+          popularity: c.popularity || 0,
+          vote_count: c.vote_count || 0,
         }))
-      const dedupedTv = dedupeById(rawTv)
-        .sort((a, b) => (b.release_date || '').localeCompare(a.release_date || ''))
-      setTvShows(dedupedTv)
+      setTvShows(sortWithTopPopular(dedupeById(rawTv)))
     }).catch(() => {
       setDetail({ biography: null, birthday: null, place_of_birth: null, profile_path: null })
       setMovies([])
@@ -150,8 +166,7 @@ export default function PersonPopup({
   }, [personId])
 
   const handleFilmClick = (c: CreditItem) => {
-    if (!onSelectFilm) return
-    onSelectFilm({
+    const filmItem: FilmNavItem = {
       movieId: c.id,
       mediaType: c.media_type,
       title: c.title,
@@ -161,7 +176,12 @@ export default function PersonPopup({
       overview: c.overview,
       releaseDate: c.release_date,
       voteAverage: c.vote_average,
-    })
+    }
+    if (onSelectFilm) {
+      onSelectFilm(filmItem)
+    } else {
+      setInternalDetail(filmItem)
+    }
   }
 
   const toggleFavorite = async () => {
@@ -200,20 +220,19 @@ export default function PersonPopup({
         <button
           key={`${c.media_type}-${c.id}-${idx}`}
           onClick={() => handleFilmClick(c)}
-          disabled={!onSelectFilm}
           style={{
             background: '#0f172a',
             border: '1px solid rgba(255,255,255,0.06)',
             borderRadius: '8px',
             overflow: 'hidden',
-            cursor: onSelectFilm ? 'pointer' : 'default',
+            cursor: 'pointer',
             textAlign: 'left',
             padding: 0,
             transition: 'transform 0.15s',
             display: 'flex',
             flexDirection: 'column',
           }}
-          onMouseEnter={e => { if (onSelectFilm) e.currentTarget.style.transform = 'scale(1.03)' }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)' }}
           onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
         >
           <div style={{ position: 'relative', paddingBottom: '150%', width: '100%' }}>
@@ -232,7 +251,12 @@ export default function PersonPopup({
           </div>
           <div style={{ padding: '6px' }}>
             <p style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 500, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{c.title}</p>
-            <p style={{ color: '#475569', fontSize: '8px', marginTop: '2px' }}>{c.release_date?.substring(0, 4)}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+              <p style={{ color: '#475569', fontSize: '8px' }}>{c.release_date?.substring(0, 4)}</p>
+              {c.vote_average > 0 && (
+                <p style={{ color: '#f59e0b', fontSize: '8px' }}>⭐{c.vote_average.toFixed(1)}</p>
+              )}
+            </div>
             {c.character && (
               <p style={{ color: '#7F77DD', fontSize: '8px', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.character}</p>
             )}
@@ -243,6 +267,24 @@ export default function PersonPopup({
   )
 
   return (
+    <>
+    {/* Film detay popup (onSelectFilm olmadığında dahili kullanım) */}
+    {internalDetail && (
+      <MovieDetailPopup
+        isOpen
+        onClose={() => setInternalDetail(null)}
+        movieId={internalDetail.movieId}
+        mediaType={internalDetail.mediaType}
+        title={internalDetail.title}
+        originalTitle={internalDetail.originalTitle}
+        poster={internalDetail.poster}
+        backdrop={internalDetail.backdrop}
+        overview={internalDetail.overview}
+        releaseDate={internalDetail.releaseDate}
+        voteAverage={internalDetail.voteAverage}
+        zIndex={zIndex + 50}
+      />
+    )}
     <div
       style={{
         position: 'fixed', inset: 0, zIndex,
@@ -385,5 +427,6 @@ export default function PersonPopup({
         </div>
       </div>
     </div>
+    </>
   )
 }

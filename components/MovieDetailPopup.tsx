@@ -71,6 +71,7 @@ interface MovieDetailPopupProps {
   year?: number
   imdb?: number
   contentType?: 'film' | 'dizi'
+  zIndex?: number
 }
 
 function relativeTime(dateStr: string): string {
@@ -87,7 +88,7 @@ function relativeTime(dateStr: string): string {
 export default function MovieDetailPopup({
   isOpen, onClose, movieId, mediaType,
   title, originalTitle, turkishTitle, poster, backdrop, overview,
-  releaseDate, voteAverage, year, imdb, contentType,
+  releaseDate, voteAverage, year, imdb, contentType, zIndex = 50,
 }: MovieDetailPopupProps) {
   const { user, signInWithGoogle } = useAuth()
 
@@ -136,7 +137,7 @@ export default function MovieDetailPopup({
 
   const BADGE_EMOJIS: Record<string, string> = {
     'Yeni Üye': '🌱', 'Film Sever': '🎬', 'Sinefil': '🎭',
-    'Film Gurmesi': '🏆', 'Efsane Eleştirmen': '⭐',
+    'Film Gurmesi': '👑', 'Efsane Eleştirmen': '🏆',
   }
 
   const myExistingReview = reviews.find(r => r.user_id === user?.id)
@@ -395,8 +396,8 @@ export default function MovieDetailPopup({
   return (
     <>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center px-4"
-        style={{ background: '#000000cc' }}
+        className="fixed inset-0 flex items-center justify-center px-4"
+        style={{ background: '#000000cc', zIndex }}
         onClick={actorPopup ? undefined : onClose}
       >
         <div

@@ -1,25 +1,52 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import NotificationBell from '@/components/NotificationBell'
+import PersonPopup from '@/components/PersonPopup'
 import { checkBadgeNotification } from '@/lib/notifications'
 
 interface Stats {
   watchlist: number
   watched: number
   reviews: number
+  favoriteActors: number
+}
+
+interface UserReview {
+  id: string
+  movie_title: string
+  movie_type: string
+  rating: number
+  comment: string | null
+  created_at: string
+}
+
+interface FavoriteActor {
+  id: string
+  actor_id: number
+  actor_name: string
+  profile_path: string | null
 }
 
 const BADGE_THRESHOLDS = [
   { name: 'Yeni Üye',          emoji: '🌱', min: 0,   next: 50  },
   { name: 'Film Sever',         emoji: '🎬', min: 50,  next: 150 },
   { name: 'Sinefil',            emoji: '🎭', min: 150, next: 300 },
-  { name: 'Film Gurmesi',       emoji: '🏆', min: 300, next: 500 },
-  { name: 'Efsane Eleştirmen',  emoji: '⭐', min: 500, next: null },
+  { name: 'Film Gurmesi',       emoji: '👑', min: 300, next: 500 },
+  { name: 'Efsane Eleştirmen',  emoji: '🏆', min: 500, next: null },
 ]
 
 const PLATFORMS = ['Netflix', 'Amazon Prime', 'Disney+', 'BluTV', 'MUBI', 'Exxen', 'Gain', 'HBO Max', 'Tabii']
+
+function StarRow({ rating }: { rating: number }) {
+  return (
+    <span style={{ color: '#f59e0b', fontSize: '12px' }}>
+      {'★'.repeat(rating)}{'☆'.repeat(5 - rating)}
+    </span>
+  )
+}
 
 function ShareButton() {
   const [shared, setShared] = useState(false)
@@ -45,8 +72,9 @@ function ShareButton() {
 
 export default function Profile() {
   const { user, loading, signInWithGoogle, signOut } = useAuth()
+  const router = useRouter()
 
-  const [stats, setStats]                 = useState<Stats>({ watchlist: 0, watched: 0, reviews: 0 })
+  const [stats, setStats]                 = useState<Stats>({ watchlist: 0, watched: 0, reviews: 0, favoriteActors: 0 })
   const [statsLoading, setStatsLoading]   = useState(false)
   const [points, setPoints]               = useState(0)
   const [badge, setBadge]                 = useState('Yeni Üye')
@@ -54,22 +82,35 @@ export default function Profile() {
   const [savingPlatforms, setSavingPlatforms] = useState(false)
   const [platformsSaved, setPlatformsSaved]   = useState(false)
 
+  // Popup states
+  const [reviewsPopup, setReviewsPopup]         = useState(false)
+  const [actorsPopup, setActorsPopup]           = useState(false)
+  const [userReviews, setUserReviews]           = useState<UserReview[]>([])
+  const [favoriteActorsList, setFavoriteActorsList] = useState<FavoriteActor[]>([])
+  const [selectedActor, setSelectedActor]       = useState<FavoriteActor | null>(null)
+
   useEffect(() => {
     if (!user) return
     setStatsLoading(true)
 
     Promise.all([
       supabase.from('watchlist').select('status').eq('user_id', user.id),
-      supabase.from('reviews').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      supabase.from('reviews').select('id, movie_title, movie_type, rating, comment, created_at').eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase.from('user_points').select('total_points, badge').eq('user_id', user.id).maybeSingle(),
       supabase.from('profiles').select('preferred_platforms').eq('id', user.id).maybeSingle(),
-    ]).then(([wlRes, revRes, pointsRes, profileRes]) => {
+      supabase.from('favorite_actors').select('id, actor_id, actor_name, profile_path').eq('user_id', user.id).order('created_at', { ascending: false }),
+    ]).then(([wlRes, revRes, pointsRes, profileRes, actorsRes]) => {
       const items = wlRes.data || []
+      const reviews = revRes.data || []
+      const actors = actorsRes.data || []
       setStats({
         watchlist: items.filter(i => i.status === 'saved').length,
         watched:   items.filter(i => i.status === 'watched').length,
-        reviews:   revRes.count || 0,
+        reviews:   reviews.length,
+        favoriteActors: actors.length,
       })
+      setUserReviews(reviews)
+      setFavoriteActorsList(actors)
       if (pointsRes.data) {
         setPoints(pointsRes.data.total_points)
         setBadge(pointsRes.data.badge)
@@ -142,6 +183,95 @@ export default function Profile() {
 
   return (
     <main className="min-h-screen px-6 pt-12 pb-24" style={{ background: '#0a0a0f' }}>
+
+      {/* ─── Yorumlar Popup ─── */}
+      {reviewsPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: '#000000cc' }} onClick={() => setReviewsPopup(false)}>
+          <div className="w-full max-w-md rounded-2xl border" style={{ background: '#12121a', borderColor: '#ffffff15', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: '#ffffff08' }}>
+              <h3 className="font-bold text-lg" style={{ color: '#f1f5f9' }}>Yorumlarım ({userReviews.length})</h3>
+              <button onClick={() => setReviewsPopup(false)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#ffffff10', color: '#94a3b8' }}>✕</button>
+            </div>
+            {userReviews.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-4xl mb-3">💬</div>
+                <p style={{ color: '#64748b' }}>Henüz yorum yazmadın.</p>
+              </div>
+            ) : (
+              <div className="p-4 flex flex-col gap-3">
+                {userReviews.map(rev => (
+                  <div key={rev.id} className="p-3 rounded-xl border" style={{ background: '#0f172a', borderColor: '#ffffff08' }}>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="font-semibold text-sm" style={{ color: '#f1f5f9' }}>{rev.movie_title}</p>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: rev.movie_type === 'film' ? '#f59e0b22' : '#3b82f622', color: rev.movie_type === 'film' ? '#f59e0b' : '#60a5fa' }}>
+                        {rev.movie_type === 'film' ? 'Film' : 'Dizi'}
+                      </span>
+                    </div>
+                    <StarRow rating={rev.rating} />
+                    {rev.comment && (
+                      <p className="text-xs mt-1.5 leading-relaxed" style={{ color: '#94a3b8' }}>{rev.comment}</p>
+                    )}
+                    <p className="text-[10px] mt-2" style={{ color: '#475569' }}>
+                      {new Date(rev.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Favori Oyuncular Popup ─── */}
+      {actorsPopup && !selectedActor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: '#000000cc' }} onClick={() => setActorsPopup(false)}>
+          <div className="w-full max-w-md rounded-2xl border" style={{ background: '#12121a', borderColor: '#ffffff15', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: '#ffffff08' }}>
+              <h3 className="font-bold text-lg" style={{ color: '#f1f5f9' }}>Favori Oyuncular ({favoriteActorsList.length})</h3>
+              <button onClick={() => setActorsPopup(false)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#ffffff10', color: '#94a3b8' }}>✕</button>
+            </div>
+            {favoriteActorsList.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-4xl mb-3">❤️</div>
+                <p style={{ color: '#64748b' }}>Henüz favori oyuncun yok.</p>
+                <p className="text-sm mt-1" style={{ color: '#475569' }}>Oyuncu profillerinde ❤️ butonuna bas!</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-3 p-4">
+                {favoriteActorsList.map(actor => (
+                  <button
+                    key={actor.id}
+                    onClick={() => setSelectedActor(actor)}
+                    className="rounded-xl border p-3 text-center transition-all hover:scale-[1.02] active:scale-95"
+                    style={{ background: '#0f172a', borderColor: '#7F77DD33' }}
+                  >
+                    <div className="w-14 h-14 rounded-full overflow-hidden mx-auto mb-2 border-2" style={{ borderColor: '#7F77DD' }}>
+                      {actor.profile_path ? (
+                        <img src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`} alt={actor.actor_name} className="w-full h-full object-cover" loading="lazy" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-xl" style={{ background: '#1e293b' }}>👤</div>
+                      )}
+                    </div>
+                    <p className="text-[11px] font-semibold leading-tight" style={{ color: '#f1f5f9' }}>{actor.actor_name}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* PersonPopup (favori oyuncu seçildiğinde) */}
+      {selectedActor && (
+        <PersonPopup
+          personId={selectedActor.actor_id}
+          personName={selectedActor.actor_name}
+          personProfile={selectedActor.profile_path ? `https://image.tmdb.org/t/p/w185${selectedActor.profile_path}` : null}
+          onClose={() => setSelectedActor(null)}
+          zIndex={60}
+        />
+      )}
+
       <div className="max-w-md mx-auto">
 
         {/* Üst bar */}
@@ -225,26 +355,52 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* ─── İstatistikler ─── */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="text-center p-3 rounded-xl" style={{ background: '#12121a' }}>
-            <p className="text-lg font-bold" style={{ color: '#f59e0b' }}>
+        {/* ─── İstatistikler (2x2 tıklanabilir grid) ─── */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <button
+            onClick={() => router.push('/history?tab=saved')}
+            className="text-center p-4 rounded-xl transition-all hover:scale-[1.02] active:scale-95 border"
+            style={{ background: '#12121a', borderColor: '#ffffff08' }}
+          >
+            <p className="text-2xl font-bold mb-1" style={{ color: '#f59e0b' }}>
               {statsLoading ? '—' : stats.watchlist}
             </p>
-            <p className="text-[10px]" style={{ color: '#64748b' }}>İzleme Listem</p>
-          </div>
-          <div className="text-center p-3 rounded-xl" style={{ background: '#12121a' }}>
-            <p className="text-lg font-bold" style={{ color: '#22c55e' }}>
+            <p className="text-[11px]" style={{ color: '#64748b' }}>İzleme Listem</p>
+            <p className="text-[9px] mt-0.5" style={{ color: '#334155' }}>görüntüle →</p>
+          </button>
+          <button
+            onClick={() => router.push('/history?tab=watched')}
+            className="text-center p-4 rounded-xl transition-all hover:scale-[1.02] active:scale-95 border"
+            style={{ background: '#12121a', borderColor: '#ffffff08' }}
+          >
+            <p className="text-2xl font-bold mb-1" style={{ color: '#22c55e' }}>
               {statsLoading ? '—' : stats.watched}
             </p>
-            <p className="text-[10px]" style={{ color: '#64748b' }}>İzlediklerim</p>
-          </div>
-          <div className="text-center p-3 rounded-xl" style={{ background: '#12121a' }}>
-            <p className="text-lg font-bold" style={{ color: '#3b82f6' }}>
+            <p className="text-[11px]" style={{ color: '#64748b' }}>İzlediklerim</p>
+            <p className="text-[9px] mt-0.5" style={{ color: '#334155' }}>görüntüle →</p>
+          </button>
+          <button
+            onClick={() => { if (!statsLoading) setReviewsPopup(true) }}
+            className="text-center p-4 rounded-xl transition-all hover:scale-[1.02] active:scale-95 border"
+            style={{ background: '#12121a', borderColor: '#ffffff08' }}
+          >
+            <p className="text-2xl font-bold mb-1" style={{ color: '#3b82f6' }}>
               {statsLoading ? '—' : stats.reviews}
             </p>
-            <p className="text-[10px]" style={{ color: '#64748b' }}>Yorumlarım</p>
-          </div>
+            <p className="text-[11px]" style={{ color: '#64748b' }}>Yorumlarım</p>
+            <p className="text-[9px] mt-0.5" style={{ color: '#334155' }}>görüntüle →</p>
+          </button>
+          <button
+            onClick={() => { if (!statsLoading) setActorsPopup(true) }}
+            className="text-center p-4 rounded-xl transition-all hover:scale-[1.02] active:scale-95 border"
+            style={{ background: '#12121a', borderColor: '#ffffff08' }}
+          >
+            <p className="text-2xl font-bold mb-1" style={{ color: '#a855f7' }}>
+              {statsLoading ? '—' : stats.favoriteActors}
+            </p>
+            <p className="text-[11px]" style={{ color: '#64748b' }}>Favori Oyuncular</p>
+            <p className="text-[9px] mt-0.5" style={{ color: '#334155' }}>görüntüle →</p>
+          </button>
         </div>
 
         {/* ─── Platform Tercihleri ─── */}

@@ -50,6 +50,15 @@ export default function History() {
   const [favoriteActors, setFavoriteActors] = useState<FavoriteActor[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<FilterType>('all')
+
+  // URL param ile başlangıç tab seçimi (profil sayfasından yönlendirme)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tab = params.get('tab') as FilterType | null
+    if (tab === 'saved' || tab === 'watched' || tab === 'actors') {
+      setFilter(tab)
+    }
+  }, [])
   const [detailOpen, setDetailOpen] = useState(false)
   const [detail, setDetail] = useState<DetailState | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -147,7 +156,7 @@ export default function History() {
     { key: 'all' as FilterType, label: 'Tümü', count: allItems.length },
     { key: 'saved' as FilterType, label: 'İzleme Listem', count: savedItems.length },
     { key: 'watched' as FilterType, label: 'İzlediklerim', count: watchedItems.length },
-    { key: 'actors' as FilterType, label: 'Favori Oyuncular', count: favoriteActors.length },
+    { key: 'actors' as FilterType, label: 'Sevdiğim Oyuncular', count: favoriteActors.length },
   ]
 
   return (
@@ -282,7 +291,10 @@ export default function History() {
                         <p className="text-xs" style={{ color: '#94a3b8' }}>{item.turkish_title}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+                      {item.status === 'saved' && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: '#f59e0b22', color: '#f59e0b' }}>⏳ Listede</span>
+                      )}
                       {item.status === 'watched' && (
                         <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: '#22c55e22', color: '#22c55e' }}>✓ İzlendi</span>
                       )}

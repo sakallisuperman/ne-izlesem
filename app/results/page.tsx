@@ -323,6 +323,15 @@ export default function Results() {
       )}
 
       <div className="max-w-2xl mx-auto">
+        {/* Ana Sayfa geri linki */}
+        <button
+          onClick={() => router.push('/')}
+          className="flex items-center gap-1.5 mb-6 text-sm transition-opacity hover:opacity-70"
+          style={{ color: '#94a3b8' }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
+          Ana Sayfa
+        </button>
         <h1 className="text-3xl font-bold text-center mb-2" style={{ color: '#f59e0b' }}>Senin İçin Seçtik 🎬</h1>
         <p className="text-center mb-6" style={{ color: '#94a3b8' }}>Ruh haline göre 6 öneri — 3 film, 3 dizi</p>
 
@@ -346,7 +355,7 @@ export default function Results() {
               color: activeTab === 'reverse' ? '#fff' : '#64748b',
             }}
           >
-            🔄 Ruh Haline İyi Gelecek
+            ✨ Ruh Haline İyi Gelecek
           </button>
         </div>
 
@@ -482,7 +491,7 @@ export default function Results() {
               className="px-8 py-4 rounded-full font-semibold transition-all hover:scale-105 border"
               style={{ background: 'transparent', color: '#94a3b8', borderColor: '#ffffff20' }}
             >
-              🔄 Farklı Öneriler Keşfet
+              🎲 Farklı Öneriler Keşfet
             </button>
           )}
           <button onClick={() => router.push('/quiz')}

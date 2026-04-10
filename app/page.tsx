@@ -215,7 +215,7 @@ export default function Home() {
                   <button key={i} onClick={() => setPopup(pick)} className="rounded-lg overflow-hidden border px-3 py-2 text-left transition-all hover:scale-105 active:scale-95" style={{ background: '#12121a', borderColor: 'rgba(255,255,255,0.06)' }}>
                     <div className="flex items-center gap-2">
                       <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded" style={{ background: pick.type === 'film' ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.15)', color: pick.type === 'film' ? '#f59e0b' : '#60a5fa' }}>{pick.type === 'film' ? 'Film' : 'Dizi'}</span>
-                      <span className="text-[11px] font-medium" style={{ color: '#e2e8f0' }}>{pick.turkish_title || pick.title}</span>
+                      <span className="text-[11px] font-medium" style={{ color: '#e2e8f0', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{pick.turkish_title || pick.title}</span>
                     </div>
                     <p className="text-[9px] mt-1" style={{ color: '#475569' }}>{pick.year} • ⭐ {pick.imdb}</p>
                   </button>
@@ -225,7 +225,10 @@ export default function Home() {
           )}
           {popularMovies.length > 0 && (
             <div className={loaded ? 'w-full mb-6 transition-all duration-700 delay-150 opacity-100 translate-y-0' : 'w-full mb-6 transition-all duration-700 delay-150 opacity-0 translate-y-4'}>
-              <p className="text-center text-[10px] font-semibold mb-2 tracking-widest" style={{ color: '#f59e0b44' }}>🔥 EN ÇOK İZLENENLER</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-semibold tracking-widest" style={{ color: '#f59e0b44' }}>🔥 EN ÇOK İZLENENLER</p>
+                <Link href="/enler" className="text-[10px] font-semibold transition-opacity hover:opacity-70" style={{ color: '#f59e0b88' }}>Tüm Enler →</Link>
+              </div>
               <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                 {popularMovies.map((m, i) => (
                   <div key={i} className="flex-shrink-0 rounded-xl overflow-hidden border" style={{ width: '80px', background: '#12121a', borderColor: 'rgba(255,255,255,0.06)' }}>

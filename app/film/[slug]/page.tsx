@@ -41,7 +41,7 @@ interface FilmData {
 
 const BADGE_EMOJIS: Record<string, string> = {
   'Yeni Üye': '🌱', 'Film Sever': '🎬', 'Sinefil': '🎭',
-  'Film Gurmesi': '🏆', 'Efsane Eleştirmen': '⭐',
+  'Film Gurmesi': '👑', 'Efsane Eleştirmen': '🏆',
 }
 
 function relativeTime(dateStr: string): string {
