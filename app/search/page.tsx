@@ -81,34 +81,52 @@ function mapResults(raw: any[]): AnyResult[] {
   })
 }
 
+interface PersonDetail {
+  biography: string | null
+  birthday: string | null
+  place_of_birth: string | null
+  profile_path: string | null
+}
+
 /* ─── Oyuncu Popup ─── */
 function PersonPopup({ person, onClose }: { person: PersonResult; onClose: () => void }) {
+  const [detail, setDetail] = useState<PersonDetail | null>(null)
   const [credits, setCredits] = useState<CreditItem[] | null>(null)
-  const [detail, setDetail] = useState<MovieResult | null>(null)
+  const [selectedFilm, setSelectedFilm] = useState<MovieResult | null>(null)
+  const [bioExpanded, setBioExpanded] = useState(false)
 
   // Body scroll kilidi
   useEffect(() => {
     document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = '' }
+    return () => { document.body.style.overflow = 'auto' }
   }, [])
 
-  // Filmografiyi yükle
+  // Oyuncu detayı + filmografi paralel çek
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
-    fetch(`https://api.themoviedb.org/3/person/${person.id}/combined_credits?api_key=${apiKey}&language=tr-TR`)
-      .then(r => r.json())
-      .then(data => {
-        const cast: CreditItem[] = (data.cast || [])
-          .filter((c: any) => c.media_type === 'movie' || c.media_type === 'tv')
-          .sort((a: any, b: any) => (b.popularity || 0) - (a.popularity || 0))
-          .slice(0, 30)
-        setCredits(cast)
+    Promise.all([
+      fetch(`https://api.themoviedb.org/3/person/${person.id}?api_key=${apiKey}&language=tr-TR`).then(r => r.json()),
+      fetch(`https://api.themoviedb.org/3/person/${person.id}/combined_credits?api_key=${apiKey}&language=tr-TR`).then(r => r.json()),
+    ]).then(([personData, creditsData]) => {
+      setDetail({
+        biography: personData.biography || null,
+        birthday: personData.birthday || null,
+        place_of_birth: personData.place_of_birth || null,
+        profile_path: personData.profile_path || null,
       })
-      .catch(() => setCredits([]))
+      const cast: CreditItem[] = (creditsData.cast || [])
+        .filter((c: any) => (c.media_type === 'movie' || c.media_type === 'tv') && c.poster_path)
+        .sort((a: any, b: any) => (b.popularity || 0) - (a.popularity || 0))
+        .slice(0, 30)
+      setCredits(cast)
+    }).catch(() => {
+      setDetail({ biography: null, birthday: null, place_of_birth: null, profile_path: null })
+      setCredits([])
+    })
   }, [person.id])
 
-  const openCredit = (c: CreditItem) => {
-    setDetail({
+  const openFilm = (c: CreditItem) => {
+    setSelectedFilm({
       kind: 'media',
       id: c.id,
       media_type: c.media_type,
@@ -122,85 +140,143 @@ function PersonPopup({ person, onClose }: { person: PersonResult; onClose: () =>
     })
   }
 
+  const profileUrl = detail?.profile_path
+    ? `https://image.tmdb.org/t/p/w300${detail.profile_path}`
+    : person.profile
+
+  const bio = detail?.biography || ''
+  const bioShort = bio.length > 200
+
+  const formatDate = (d: string | null) => {
+    if (!d) return null
+    const [y, m, mo] = d.split('-')
+    const months = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara']
+    return `${mo} ${months[parseInt(m) - 1]} ${y}`
+  }
+
   return (
     <>
+      {/* Overlay */}
       <div
-        className="fixed inset-0 z-40 flex items-end justify-center"
-        style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 50,
+          background: '#000000cc',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '16px',
+        }}
         onClick={onClose}
       >
+        {/* İç kapsayıcı */}
         <div
-          className="w-full max-w-lg rounded-t-3xl overflow-y-auto"
-          style={{ background: '#12121a', maxHeight: '90vh' }}
+          style={{
+            width: '100%', maxWidth: '448px', maxHeight: '85vh',
+            overflowY: 'auto', borderRadius: '16px',
+            background: '#12121a', position: 'relative',
+          }}
           onClick={e => e.stopPropagation()}
         >
           {/* Kapat butonu */}
-          <div className="sticky top-0 z-10 flex justify-end pt-4 pr-4" style={{ background: '#12121a' }}>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-sm"
-              style={{ background: '#1e293b', color: '#94a3b8' }}
-            >✕</button>
-          </div>
+          <button
+            onClick={onClose}
+            style={{
+              position: 'absolute', top: '12px', right: '12px', zIndex: 10,
+              width: '32px', height: '32px', borderRadius: '50%',
+              background: '#1e293b', color: '#94a3b8',
+              border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '14px',
+            }}
+          >✕</button>
 
-          <div className="px-6 pb-8">
-            {/* Profil fotoğrafı + isim */}
-            <div className="flex flex-col items-center mb-6">
-              <div className="w-28 h-28 rounded-full overflow-hidden mb-4 border-2" style={{ borderColor: '#7F77DD' }}>
-                {person.profile ? (
-                  <img src={person.profile} alt={person.name} className="w-full h-full object-cover" loading="lazy" />
+          <div style={{ padding: '24px' }}>
+            {/* Profil fotoğrafı */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '20px' }}>
+              <div style={{ width: '120px', height: '120px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #7F77DD', marginBottom: '12px', flexShrink: 0, background: '#1e293b' }}>
+                {profileUrl ? (
+                  <img src={profileUrl} alt={person.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-4xl" style={{ background: '#1e293b' }}>👤</div>
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px' }}>👤</div>
                 )}
               </div>
-              <h2 className="text-xl font-bold text-center" style={{ color: '#f1f5f9' }}>{person.name}</h2>
-              <span className="mt-1.5 text-xs px-3 py-1 rounded-full font-semibold" style={{ background: '#7F77DD22', color: '#7F77DD', border: '1px solid #7F77DD44' }}>
+              <h2 style={{ color: '#f1f5f9', fontSize: '20px', fontWeight: 700, textAlign: 'center', margin: 0 }}>{person.name}</h2>
+              <span style={{ marginTop: '6px', fontSize: '11px', padding: '3px 12px', borderRadius: '999px', fontWeight: 600, background: '#7F77DD22', color: '#7F77DD', border: '1px solid #7F77DD44' }}>
                 {person.known_for_department === 'Acting' ? 'Oyuncu' : person.known_for_department || 'Oyuncu'}
               </span>
             </div>
 
+            {/* Bilgi kartları */}
+            {detail && (detail.birthday || detail.place_of_birth || credits) && (
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                {detail.birthday && (
+                  <div style={{ flex: 1, minWidth: '100px', background: '#0f172a', borderRadius: '10px', padding: '8px 10px', textAlign: 'center' }}>
+                    <p style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>DOĞUM</p>
+                    <p style={{ color: '#cbd5e1', fontSize: '11px', fontWeight: 500 }}>{formatDate(detail.birthday)}</p>
+                  </div>
+                )}
+                {detail.place_of_birth && (
+                  <div style={{ flex: 2, minWidth: '120px', background: '#0f172a', borderRadius: '10px', padding: '8px 10px', textAlign: 'center' }}>
+                    <p style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>DOĞUM YERİ</p>
+                    <p style={{ color: '#cbd5e1', fontSize: '11px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detail.place_of_birth}</p>
+                  </div>
+                )}
+                {credits !== null && (
+                  <div style={{ flex: 1, minWidth: '80px', background: '#0f172a', borderRadius: '10px', padding: '8px 10px', textAlign: 'center' }}>
+                    <p style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>YAPIM</p>
+                    <p style={{ color: '#f59e0b', fontSize: '14px', fontWeight: 700 }}>{credits.length}+</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Biyografi */}
+            {bio && (
+              <div style={{ marginBottom: '20px' }}>
+                <p style={{ color: '#64748b', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', marginBottom: '8px' }}>BİYOGRAFİ</p>
+                <p style={{ color: '#94a3b8', fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
+                  {bioShort && !bioExpanded ? bio.substring(0, 200) + '...' : bio}
+                </p>
+                {bioShort && (
+                  <button
+                    onClick={() => setBioExpanded(e => !e)}
+                    style={{ background: 'none', border: 'none', color: '#7F77DD', fontSize: '12px', cursor: 'pointer', padding: '4px 0', marginTop: '4px' }}
+                  >
+                    {bioExpanded ? 'Daha az ↑' : 'Devamını oku ↓'}
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Filmografi */}
-            <p className="text-xs font-semibold mb-3 tracking-widest" style={{ color: '#64748b' }}>FİLMOGRAFİ</p>
+            <p style={{ color: '#64748b', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', marginBottom: '10px' }}>FİLMOGRAFİ</p>
             {credits === null ? (
-              <div className="flex gap-1.5 justify-center py-8">
+              <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', padding: '32px 0' }}>
                 {[0, 1, 2].map(i => (
-                  <div key={i} className="w-2 h-2 rounded-full animate-bounce" style={{ background: '#7F77DD', animationDelay: `${i * 150}ms` }} />
+                  <div key={i} className="animate-bounce" style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#7F77DD', animationDelay: `${i * 150}ms` }} />
                 ))}
               </div>
             ) : credits.length === 0 ? (
-              <p className="text-sm text-center py-4" style={{ color: '#64748b' }}>Filmografi bulunamadı.</p>
+              <p style={{ color: '#64748b', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>Filmografi bulunamadı.</p>
             ) : (
-              <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                 {credits.map(c => (
                   <button
                     key={`${c.media_type}-${c.id}`}
-                    onClick={() => openCredit(c)}
-                    className="flex-shrink-0 rounded-xl overflow-hidden text-left transition-all hover:scale-[1.03] active:scale-95"
-                    style={{ width: '90px', background: '#0f172a', border: '1px solid rgba(255,255,255,0.06)' }}
+                    onClick={() => openFilm(c)}
+                    style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer', textAlign: 'left', padding: 0, transition: 'transform 0.15s', display: 'flex', flexDirection: 'column' }}
+                    onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.03)')}
+                    onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
                   >
-                    {c.poster_path ? (
+                    <div style={{ position: 'relative', paddingBottom: '150%', width: '100%' }}>
                       <img
                         src={`https://image.tmdb.org/t/p/w185${c.poster_path}`}
                         alt={c.title}
-                        className="w-full object-cover"
-                        style={{ height: '130px' }}
                         loading="lazy"
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                       />
-                    ) : (
-                      <div className="flex items-center justify-center" style={{ height: '130px', background: 'linear-gradient(135deg, #1a1a2e, #16213e)' }}>
-                        <span style={{ fontSize: '24px' }}>🎬</span>
-                      </div>
-                    )}
-                    <div className="px-1.5 py-1.5">
-                      <p className="text-[9px] leading-tight font-medium" style={{ color: '#cbd5e1', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                        {c.title}
-                      </p>
-                      <div className="flex items-center justify-between mt-0.5">
-                        <span className="text-[8px]" style={{ color: '#475569' }}>{c.release_date?.substring(0, 4)}</span>
-                        <span className="text-[8px] px-1 py-0.5 rounded" style={{ background: c.media_type === 'movie' ? '#f59e0b18' : '#3b82f618', color: c.media_type === 'movie' ? '#f59e0b' : '#60a5fa' }}>
-                          {c.media_type === 'movie' ? 'F' : 'D'}
-                        </span>
-                      </div>
+                    </div>
+                    <div style={{ padding: '6px' }}>
+                      <p style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 500, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{c.title}</p>
+                      <p style={{ color: '#475569', fontSize: '8px', marginTop: '2px' }}>{c.release_date?.substring(0, 4)}</p>
                     </div>
                   </button>
                 ))}
@@ -210,20 +286,20 @@ function PersonPopup({ person, onClose }: { person: PersonResult; onClose: () =>
         </div>
       </div>
 
-      {detail && (
+      {selectedFilm && (
         <MovieDetailPopup
           isOpen
-          onClose={() => setDetail(null)}
-          movieId={detail.id}
-          mediaType={detail.media_type}
-          title={detail.title}
-          originalTitle={detail.original_title}
-          poster={detail.poster}
-          backdrop={detail.backdrop}
-          overview={detail.overview}
-          releaseDate={detail.release_date}
-          voteAverage={detail.vote_average}
-          contentType={detail.media_type === 'movie' ? 'film' : 'dizi'}
+          onClose={() => setSelectedFilm(null)}
+          movieId={selectedFilm.id}
+          mediaType={selectedFilm.media_type}
+          title={selectedFilm.title}
+          originalTitle={selectedFilm.original_title}
+          poster={selectedFilm.poster}
+          backdrop={selectedFilm.backdrop}
+          overview={selectedFilm.overview}
+          releaseDate={selectedFilm.release_date}
+          voteAverage={selectedFilm.vote_average}
+          contentType={selectedFilm.media_type === 'movie' ? 'film' : 'dizi'}
         />
       )}
     </>

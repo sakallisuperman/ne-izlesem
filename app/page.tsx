@@ -45,20 +45,17 @@ export default function Home() {
 
   const [dailyPicks, setDailyPicks] = useState<PickDetail[]>([])
 
-  // Saat bazlı karşılama
+  // Saat bazlı karşılama (sağ üst köşe için kısa format)
   useEffect(() => {
     const h = new Date().getHours()
-    const day = new Date().getDay()
-    const isWeekend = day === 0 || day === 6
     const firstName = user?.user_metadata?.full_name?.split(' ')[0] || ''
-    const name = firstName ? ` ${firstName}` : ''
+    const name = firstName ? `, ${firstName}` : ''
     let msg = ''
-    if (h >= 6 && h < 12)       msg = `Günaydın${name} ☀️ Kahvaltıda ne izlesem?`
-    else if (h >= 12 && h < 17) msg = `İyi öğlenler${name} 🌤️ Mola zamanı!`
-    else if (h >= 17 && h < 21) msg = `İyi akşamlar${name} 🌅 Film zamanı!`
-    else if (h >= 21 || h < 2)  msg = `Gece modu${name} 🌙 Yastık filmi zamanı`
-    else                         msg = `Uykun mu kaçtı?${name} 🦉 Seninle aynı durumda değiliz ama...`
-    if (isWeekend) msg += ' Hafta sonu keyfi!'
+    if (h >= 6 && h < 12)       msg = `Günaydın${name} ☀️`
+    else if (h >= 12 && h < 17) msg = `İyi öğlenler${name} 🌤️`
+    else if (h >= 17 && h < 21) msg = `İyi akşamlar${name} 🌅`
+    else if (h >= 21 || h < 2)  msg = `İyi geceler${name} 🌙`
+    else                         msg = `Geç saatler${name} 🦉`
     setGreeting(msg)
   }, [user])
 
@@ -193,11 +190,19 @@ export default function Home() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="#94a3b8" stroke="none"/></svg>
             Takip Et
           </a>
-          <NotificationBell />
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            {user ? (
+              <span className="text-xs" style={{ color: '#f59e0b88' }}>{greeting}</span>
+            ) : (
+              <Link href="/profile" className="text-xs font-medium transition-opacity hover:opacity-80" style={{ color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)', padding: '5px 14px', borderRadius: '20px', background: 'rgba(245,158,11,0.08)' }}>
+                Giriş Yap
+              </Link>
+            )}
+          </div>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center" style={{ marginTop: '-20px' }}>
           <div className={loaded ? 'text-center mb-10 transition-all duration-700 opacity-100 translate-y-0' : 'text-center mb-10 transition-all duration-700 opacity-0 translate-y-4'}>
-            {greeting && <p className="mb-3 text-xs" style={{ color: '#ffffff30', fontSize: '12px' }}>{greeting}</p>}
             <div className="text-6xl mb-4">🎬</div>
             <h1 className="text-5xl font-bold mb-4" style={{ color: '#f59e0b', letterSpacing: '-1px' }}>Ne İzlesem?</h1>
             <p className="text-xl" style={{ color: '#94a3b8', lineHeight: 1.6 }}>Ruh haline göre sana özel<br /><span style={{ color: '#cbd5e1', fontWeight: 500 }}>film ve dizi önerileri</span></p>
