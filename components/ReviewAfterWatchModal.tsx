@@ -24,14 +24,19 @@ export default function ReviewAfterWatchModal({
   const reviewKey = originalTitle && originalTitle !== title ? originalTitle : title
 
   const handleSubmit = async () => {
-    if (!user || rating === 0) return
+    if (!user) return
     const modResult = moderateComment(comment)
     if (!modResult.approved) {
       setMsg(modResult.reason)
       return
     }
     setSubmitting(true)
-    const userName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Kullanıcı'
+    // Nickname varsa onu kullan
+    let userName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Kullanıcı'
+    try {
+      const { data: profileData } = await supabase.from('profiles').select('nickname').eq('id', user.id).maybeSingle()
+      if (profileData?.nickname) userName = profileData.nickname
+    } catch {}
     const { error } = await supabase.from('reviews').insert({
       user_id: user.id,
       user_name: userName,
@@ -41,12 +46,12 @@ export default function ReviewAfterWatchModal({
       comment: comment.trim() || null,
     })
     if (!error) {
-      // Puan ver
       try { await supabase.rpc('award_review_points') } catch {}
       setDone(true)
       setTimeout(onClose, 1200)
     } else {
-      setMsg('Hata oluştu, tekrar dene.')
+      console.error('Review insert error:', error)
+      setMsg('Yorum kaydedilemedi, tekrar dene.')
     }
     setSubmitting(false)
   }

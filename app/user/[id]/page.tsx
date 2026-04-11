@@ -43,8 +43,13 @@ export default function UserProfilePage() {
   const [stats, setStats] = useState<WatchlistStats>({ watchlist: 0, watched: 0 })
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
-  const [following, setFollowing] = useState(false)
   const [selectedActor, setSelectedActor] = useState<FavoriteActor | null>(null)
+
+  // Follow state
+  const [following, setFollowing] = useState(false)
+  const [followLoading, setFollowLoading] = useState(false)
+  const [followerCount, setFollowerCount] = useState(0)
+  const [followingCount, setFollowingCount] = useState(0)
 
   useEffect(() => {
     if (!id) return
@@ -53,9 +58,16 @@ export default function UserProfilePage() {
       supabase.from('user_points').select('total_points, badge').eq('user_id', id).maybeSingle(),
       supabase.from('favorite_actors').select('actor_id, actor_name, profile_path').eq('user_id', id).order('created_at', { ascending: false }),
       supabase.from('watchlist').select('status').eq('user_id', id),
-    ]).then(([profileRes, pointsRes, actorsRes, wlRes]) => {
-      if (!profileRes.data) { setNotFound(true); setLoading(false); return }
-      setProfile(profileRes.data)
+      supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', id),
+      supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', id),
+    ]).then(([profileRes, pointsRes, actorsRes, wlRes, followersRes, followingRes]) => {
+      // Profile might not exist yet for new users — fall back gracefully
+      if (!profileRes.data && !pointsRes.data) {
+        setNotFound(true)
+        setLoading(false)
+        return
+      }
+      setProfile(profileRes.data || { id, nickname: null, preferred_platforms: null })
       if (pointsRes.data) setPoints(pointsRes.data)
       setActors(actorsRes.data || [])
       const wl = wlRes.data || []
@@ -63,9 +75,37 @@ export default function UserProfilePage() {
         watchlist: wl.filter(i => i.status === 'saved').length,
         watched: wl.filter(i => i.status === 'watched').length,
       })
+      setFollowerCount(followersRes.count || 0)
+      setFollowingCount(followingRes.count || 0)
       setLoading(false)
     })
   }, [id])
+
+  // Check if current user follows this profile
+  useEffect(() => {
+    if (!currentUser || !id || currentUser.id === id) return
+    supabase.from('follows')
+      .select('id')
+      .eq('follower_id', currentUser.id)
+      .eq('following_id', id)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setFollowing(true) })
+  }, [currentUser, id])
+
+  const handleFollowToggle = async () => {
+    if (!currentUser || followLoading) return
+    setFollowLoading(true)
+    if (following) {
+      await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('following_id', id)
+      setFollowing(false)
+      setFollowerCount(c => Math.max(0, c - 1))
+    } else {
+      await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: id })
+      setFollowing(true)
+      setFollowerCount(c => c + 1)
+    }
+    setFollowLoading(false)
+  }
 
   if (loading) {
     return (
@@ -104,7 +144,6 @@ export default function UserProfilePage() {
       )}
 
       <div className="max-w-md mx-auto">
-        {/* Geri butonu */}
         <button onClick={() => router.back()} className="mb-6 flex items-center gap-1 text-sm" style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>
           ← Geri
         </button>
@@ -124,22 +163,35 @@ export default function UserProfilePage() {
             {points && <span className="text-xs" style={{ color: '#475569' }}>{points.total_points} puan</span>}
           </div>
 
-          {/* Takip Et butonu (visual only, kendi profili değilse) */}
-          {!isOwnProfile && (
+          {/* Takipçi / Takip */}
+          <div className="flex gap-6 mt-3">
+            <div className="text-center">
+              <p className="text-lg font-bold" style={{ color: '#f1f5f9' }}>{followerCount}</p>
+              <p className="text-[11px]" style={{ color: '#64748b' }}>Takipçi</p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-bold" style={{ color: '#f1f5f9' }}>{followingCount}</p>
+              <p className="text-[11px]" style={{ color: '#64748b' }}>Takip</p>
+            </div>
+          </div>
+
+          {!isOwnProfile && currentUser && (
             <button
-              onClick={() => setFollowing(f => !f)}
-              className="mt-4 px-5 py-2 rounded-full text-sm font-semibold transition-all"
+              onClick={handleFollowToggle}
+              disabled={followLoading}
+              className="mt-4 px-5 py-2 rounded-full text-sm font-semibold transition-all btn-press"
               style={{
                 background: following ? '#f59e0b22' : '#f59e0b',
                 color: following ? '#f59e0b' : '#0a0a0f',
                 border: following ? '1px solid #f59e0b44' : 'none',
+                opacity: followLoading ? 0.7 : 1,
               }}
             >
               {following ? '✓ Takip Ediliyor' : '+ Takip Et'}
             </button>
           )}
           {isOwnProfile && (
-            <button onClick={() => router.push('/profile')} className="mt-4 px-5 py-2 rounded-full text-sm font-medium" style={{ background: '#12121a', color: '#94a3b8', border: '1px solid #ffffff15' }}>
+            <button onClick={() => router.push('/profile')} className="mt-4 px-5 py-2 rounded-full text-sm font-medium btn-press" style={{ background: '#12121a', color: '#94a3b8', border: '1px solid #ffffff15' }}>
               Profilimi Düzenle
             </button>
           )}
@@ -147,11 +199,11 @@ export default function UserProfilePage() {
 
         {/* İstatistikler */}
         <div className="grid grid-cols-2 gap-3 mb-8">
-          <div className="rounded-xl p-4 text-center border" style={{ background: '#12121a', borderColor: '#ffffff08' }}>
+          <div className="rounded-xl p-4 text-center border card-hover" style={{ background: '#12121a', borderColor: '#ffffff08' }}>
             <p className="text-2xl font-bold mb-1" style={{ color: '#f59e0b' }}>{stats.watchlist}</p>
             <p className="text-xs" style={{ color: '#64748b' }}>İzleme Listesi</p>
           </div>
-          <div className="rounded-xl p-4 text-center border" style={{ background: '#12121a', borderColor: '#ffffff08' }}>
+          <div className="rounded-xl p-4 text-center border card-hover" style={{ background: '#12121a', borderColor: '#ffffff08' }}>
             <p className="text-2xl font-bold mb-1" style={{ color: '#22c55e' }}>{stats.watched}</p>
             <p className="text-xs" style={{ color: '#64748b' }}>İzlenenler</p>
           </div>

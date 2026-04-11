@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import NotificationBell from '@/components/NotificationBell'
 import PersonPopup from '@/components/PersonPopup'
+import MovieDetailPopup from '@/components/MovieDetailPopup'
 import { checkBadgeNotification } from '@/lib/notifications'
 
 interface Stats {
@@ -88,6 +89,10 @@ export default function Profile() {
   const [nicknameSaved, setNicknameSaved]   = useState(false)
   const [nicknameError, setNicknameError]   = useState('')
 
+  // Surprise Me
+  const [surpriseLoading, setSurpriseLoading]   = useState(false)
+  const [surprisePopup, setSurprisePopup]       = useState<{ tmdbId: number; mediaType: 'movie' | 'tv'; title: string; poster: string | null } | null>(null)
+
   // Popup states
   const [reviewsPopup, setReviewsPopup]         = useState(false)
   const [actorsPopup, setActorsPopup]           = useState(false)
@@ -170,6 +175,28 @@ export default function Profile() {
       setTimeout(() => setNicknameSaved(false), 2000)
     }
     setSavingNickname(false)
+  }
+
+  const handleSurpriseMe = async () => {
+    if (surpriseLoading) return
+    setSurpriseLoading(true)
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
+      const page = Math.ceil(Math.random() * 5)
+      const res = await fetch(`https://api.themoviedb.org/3/movie/popular?api_key=${apiKey}&language=tr-TR&page=${page}`)
+      const data = await res.json()
+      const results = data.results || []
+      const pick = results[Math.floor(Math.random() * results.length)]
+      if (pick) {
+        setSurprisePopup({
+          tmdbId: pick.id,
+          mediaType: 'movie',
+          title: pick.title || pick.original_title || '',
+          poster: pick.poster_path ? `https://image.tmdb.org/t/p/w500${pick.poster_path}` : null,
+        })
+      }
+    } catch {}
+    setSurpriseLoading(false)
   }
 
   const badgeInfo    = BADGE_THRESHOLDS.find(b => b.name === badge) || BADGE_THRESHOLDS[0]
@@ -288,6 +315,27 @@ export default function Profile() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Surprise Me Popup */}
+      {surprisePopup && (
+        <MovieDetailPopup
+          isOpen={!!surprisePopup}
+          onClose={() => setSurprisePopup(null)}
+          movieId={surprisePopup.tmdbId}
+          mediaType={surprisePopup.mediaType}
+          title={surprisePopup.title}
+          poster={surprisePopup.poster}
+          backdrop={null}
+          overview={null}
+          zIndex={60}
+        />
+      )}
+
+      {surpriseLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: '#000000aa' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '3px solid #f59e0b33', borderTopColor: '#f59e0b', animation: 'spin 0.8s linear infinite' }} />
         </div>
       )}
 
@@ -501,6 +549,16 @@ export default function Profile() {
 
         {/* ─── Uygulamayı Paylaş ─── */}
         <ShareButton />
+
+        {/* ─── Surprise Me ─── */}
+        <button
+          onClick={handleSurpriseMe}
+          disabled={surpriseLoading}
+          className="w-full py-3 rounded-xl font-medium transition-all border mb-3 btn-press"
+          style={{ background: '#12121a', color: '#f59e0b', borderColor: '#f59e0b33', opacity: surpriseLoading ? 0.7 : 1 }}
+        >
+          🎲 Bana Rastgele Bir Şey Öner
+        </button>
 
         {/* ─── Çıkış ─── */}
         <button

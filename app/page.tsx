@@ -42,6 +42,13 @@ export default function Home() {
   const [popularPopupLoading, setPopularPopupLoading] = useState(false)
   const { user } = useAuth()
   const [popup, setPopup] = useState<PickDetail | null>(null)
+
+  // Quick mood selector
+  const [moodLoading, setMoodLoading] = useState(false)
+  const [moodResult, setMoodResult] = useState<{ title: string; turkish_title: string; year: number; imdb: number; type: string; reason: string } | null>(null)
+  const [moodPopup, setMoodPopup] = useState<{ tmdbId: number; mediaType: 'movie' | 'tv'; title: string; poster: string | null } | null>(null)
+  const [moodPopupLoading, setMoodPopupLoading] = useState(false)
+  const [selectedMood, setSelectedMood] = useState<string | null>(null)
   const [greeting, setGreeting] = useState('')
   const [reminder, setReminder] = useState<{ id: string; title: string; mood?: string } | null>(null)
 

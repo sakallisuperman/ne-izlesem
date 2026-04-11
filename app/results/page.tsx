@@ -371,7 +371,7 @@ export default function Results() {
         {!(activeTab === 'reverse' && reverseLoading) && (
           <div className="flex flex-col gap-6">
             {displayRecs.map((rec, i) => (
-              <div key={`${activeTab}-${i}`} className="rounded-2xl overflow-hidden border" style={{ background: '#12121a', borderColor: '#ffffff15' }}>
+              <div key={`${activeTab}-${i}`} className="rounded-2xl overflow-hidden border card-hover" style={{ background: '#12121a', borderColor: '#ffffff15', animation: 'fadeIn 0.3s ease forwards', animationDelay: `${i * 60}ms`, opacity: 0 }}>
                 {displayTmdb[i]?.poster_path && (
                   <div className="relative cursor-pointer" onClick={() => setDetailPopup({ rec, tmdb: displayTmdb[i] })}>
                     <img src={displayTmdb[i].poster_path!} alt={`${rec.title} posteri`} className="w-full object-cover" style={{ maxHeight: '300px', objectPosition: 'top' }} loading="lazy" />
@@ -491,7 +491,7 @@ export default function Results() {
               className="px-8 py-4 rounded-full font-semibold transition-all hover:scale-105 border"
               style={{ background: 'transparent', color: '#94a3b8', borderColor: '#ffffff20' }}
             >
-              🎲 Farklı Öneriler Keşfet
+              🎬 Farklı Öneriler Keşfet
             </button>
           )}
           <button onClick={() => router.push('/quiz')}

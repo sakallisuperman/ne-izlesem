@@ -121,6 +121,10 @@ export default function MovieDetailPopup({
   const [myComment, setMyComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitMsg, setSubmitMsg] = useState('')
+  const [reviewSort, setReviewSort] = useState<'newest' | 'liked'>('newest')
+  const [likesMap, setLikesMap] = useState<Record<string, number>>({})
+  const [myLikes, setMyLikes] = useState<Set<string>>(new Set())
+  const [likingId, setLikingId] = useState<string | null>(null)
 
   const [copied, setCopied] = useState(false)
   const [badgesMap, setBadgesMap] = useState<Record<string, string>>({})
@@ -221,6 +225,8 @@ export default function MovieDetailPopup({
     setMyRating(7)
     setMyComment('')
     setSubmitMsg('')
+    setLikesMap({})
+    setMyLikes(new Set())
     supabase
       .from('reviews')
       .select('id, user_id, user_name, rating, comment, created_at')
@@ -230,17 +236,34 @@ export default function MovieDetailPopup({
         const list = data || []
         setReviews(list)
         const userIds = list.map(r => r.user_id).filter((id, i, arr) => arr.indexOf(id) === i)
+        const reviewIds = list.map(r => r.id)
+        const fetches: PromiseLike<void>[] = []
         if (userIds.length > 0) {
-          const { data: pts } = await supabase
-            .from('user_points')
-            .select('user_id, badge')
-            .in('user_id', userIds)
-          if (pts) {
-            const map: Record<string, string> = {}
-            pts.forEach((p: { user_id: string; badge: string }) => { map[p.user_id] = p.badge })
-            setBadgesMap(map)
-          }
+          fetches.push(supabase.from('user_points').select('user_id, badge').in('user_id', userIds)
+            .then(({ data: pts }) => {
+              if (pts) {
+                const map: Record<string, string> = {}
+                pts.forEach((p: { user_id: string; badge: string }) => { map[p.user_id] = p.badge })
+                setBadgesMap(map)
+              }
+            }))
         }
+        if (reviewIds.length > 0) {
+          fetches.push(supabase.from('comment_likes').select('review_id, user_id').in('review_id', reviewIds)
+            .then(({ data: likes }) => {
+              if (likes) {
+                const counts: Record<string, number> = {}
+                const mine = new Set<string>()
+                likes.forEach((l: { review_id: string; user_id: string }) => {
+                  counts[l.review_id] = (counts[l.review_id] || 0) + 1
+                  if (user && l.user_id === user.id) mine.add(l.review_id)
+                })
+                setLikesMap(counts)
+                setMyLikes(mine)
+              }
+            }))
+        }
+        await Promise.all(fetches)
         setReviewsLoading(false)
       })
   }, [isOpen, reviewKey])
@@ -345,6 +368,22 @@ export default function MovieDetailPopup({
     setReviews(prev => prev.filter(r => r.id !== id))
   }
 
+  const handleToggleLike = async (reviewId: string) => {
+    if (!user || likingId) return
+    setLikingId(reviewId)
+    const liked = myLikes.has(reviewId)
+    if (liked) {
+      await supabase.from('comment_likes').delete().eq('user_id', user.id).eq('review_id', reviewId)
+      setMyLikes(prev => { const s = new Set(prev); s.delete(reviewId); return s })
+      setLikesMap(prev => ({ ...prev, [reviewId]: Math.max(0, (prev[reviewId] || 1) - 1) }))
+    } else {
+      await supabase.from('comment_likes').insert({ user_id: user.id, review_id: reviewId })
+      setMyLikes(prev => new Set(Array.from(prev).concat(reviewId)))
+      setLikesMap(prev => ({ ...prev, [reviewId]: (prev[reviewId] || 0) + 1 }))
+    }
+    setLikingId(null)
+  }
+
   const handleShare = async () => {
     const shareTitle = currentTitle
     const text = `"${shareTitle}" ${contentType === 'dizi' ? 'dizisini' : 'filmini'} izlemelisin! 🎬`
@@ -444,7 +483,7 @@ export default function MovieDetailPopup({
         onClick={actorPopup ? undefined : onClose}
       >
         <div
-          className="w-full max-w-md rounded-2xl overflow-hidden relative"
+          className="w-full max-w-md rounded-2xl overflow-hidden relative popup-enter"
           style={{ background: '#12121a', maxHeight: '85vh', overflowY: 'auto' }}
           onClick={e => e.stopPropagation()}
         >
@@ -598,12 +637,34 @@ export default function MovieDetailPopup({
             {enriched && enriched.providers.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2 mb-1 items-center">
                 <span className="text-[10px]" style={{ color: '#475569' }}>İzle:</span>
-                {enriched.providers.map((p, i) => (
-                  <span key={i} className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                    style={{ background: '#22c55e18', color: '#22c55e', border: '1px solid #22c55e33' }}>
-                    {p}
-                  </span>
-                ))}
+                {enriched.providers.map((p, i) => {
+                  const enc = encodeURIComponent(currentTitle)
+                  const urls: Record<string, string> = {
+                    'Netflix': `https://www.netflix.com/search?q=${enc}`,
+                    'Amazon Prime': `https://www.primevideo.com/search?phrase=${enc}`,
+                    'Disney+': `https://www.disneyplus.com/search?q=${enc}`,
+                    'BluTV': `https://www.blutv.com/arama?q=${enc}`,
+                    'MUBI': `https://mubi.com/tr/search?query=${enc}`,
+                    'Exxen': `https://www.exxen.com/search?q=${enc}`,
+                    'Gain': `https://www.gain.tv/search?q=${enc}`,
+                    'HBO Max': `https://www.max.com/search?q=${enc}`,
+                    'Tabii': `https://www.tabii.com/search?q=${enc}`,
+                  }
+                  const href = urls[p]
+                  return href ? (
+                    <a key={i} href={href} target="_blank" rel="noopener noreferrer"
+                      className="text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-0.5 transition-opacity hover:opacity-80"
+                      style={{ background: '#22c55e18', color: '#22c55e', border: '1px solid #22c55e33', textDecoration: 'none' }}>
+                      {p}
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    </a>
+                  ) : (
+                    <span key={i} className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                      style={{ background: '#22c55e18', color: '#22c55e', border: '1px solid #22c55e33' }}>
+                      {p}
+                    </span>
+                  )
+                })}
               </div>
             )}
 
@@ -698,12 +759,23 @@ export default function MovieDetailPopup({
 
             {/* ─── YORUMLAR ─── */}
             <div className="pt-4 border-t" style={{ borderColor: '#ffffff10' }}>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold tracking-wide" style={{ color: '#64748b' }}>KULLANICI YORUMLARI</p>
                 {avgRating && (
                   <span className="text-[10px]" style={{ color: '#f59e0b' }}>⭐ {avgRating} / 10 ({reviews.length} yorum)</span>
                 )}
               </div>
+              {reviews.length > 1 && (
+                <div className="flex gap-1.5 mb-3">
+                  {(['newest', 'liked'] as const).map(s => (
+                    <button key={s} onClick={() => setReviewSort(s)}
+                      className="px-2.5 py-1 rounded-full text-[10px] font-medium transition-all"
+                      style={{ background: reviewSort === s ? '#f59e0b' : '#ffffff10', color: reviewSort === s ? '#0a0a0f' : '#64748b' }}>
+                      {s === 'newest' ? '🕐 En yeni' : '❤️ En beğenilen'}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Yorum Formu */}
               {user ? (
@@ -788,7 +860,12 @@ export default function MovieDetailPopup({
                 </p>
               ) : (
                 <div className="flex flex-col gap-3">
-                  {reviews.filter(r => r.user_id !== user?.id).map(review => (
+                  {[...reviews.filter(r => r.user_id !== user?.id)]
+                    .sort((a, b) => reviewSort === 'liked'
+                      ? (likesMap[b.id] || 0) - (likesMap[a.id] || 0)
+                      : new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                    )
+                    .map(review => (
                     <div key={review.id} className="rounded-xl p-3" style={{ background: '#0f172a' }}>
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2">
@@ -797,11 +874,7 @@ export default function MovieDetailPopup({
                           </div>
                           <a href={`/user/${review.user_id}`} onClick={e => e.stopPropagation()} className="text-xs font-medium hover:underline" style={{ color: '#cbd5e1', textDecoration: 'none' }}>{review.user_name.split(' ')[0]}</a>
                           {badgesMap[review.user_id] && (
-                            <span
-                              className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
-                              style={{ background: '#f59e0b15', color: '#f59e0b' }}
-                              title={badgesMap[review.user_id]}
-                            >
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: '#f59e0b15', color: '#f59e0b' }} title={badgesMap[review.user_id]}>
                               {BADGE_EMOJIS[badgesMap[review.user_id]] || ''} {badgesMap[review.user_id]}
                             </span>
                           )}
@@ -812,8 +885,17 @@ export default function MovieDetailPopup({
                         </div>
                       </div>
                       {review.comment && (
-                        <p className="text-xs leading-relaxed" style={{ color: '#94a3b8' }}>{review.comment}</p>
+                        <p className="text-xs leading-relaxed mb-2" style={{ color: '#94a3b8' }}>{review.comment}</p>
                       )}
+                      <button
+                        onClick={() => handleToggleLike(review.id)}
+                        disabled={!user || likingId === review.id}
+                        className="flex items-center gap-1 transition-all"
+                        style={{ background: 'none', border: 'none', cursor: user ? 'pointer' : 'default', padding: 0 }}
+                      >
+                        <span style={{ fontSize: '12px', opacity: likingId === review.id ? 0.5 : 1 }}>{myLikes.has(review.id) ? '❤️' : '🤍'}</span>
+                        <span className="text-[10px]" style={{ color: myLikes.has(review.id) ? '#f43f5e' : '#475569' }}>{likesMap[review.id] || 0}</span>
+                      </button>
                     </div>
                   ))}
                 </div>
