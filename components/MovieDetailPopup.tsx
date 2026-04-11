@@ -7,6 +7,8 @@ import PersonPopup from '@/components/PersonPopup'
 import type { FilmNavItem } from '@/components/PersonPopup'
 import { formatDateTR } from '@/lib/utils'
 import { fetchCached } from '@/lib/tmdbCache'
+import { moderateComment } from '@/lib/moderation'
+import ReviewAfterWatchModal from '@/components/ReviewAfterWatchModal'
 
 interface CastMember {
   id: number
@@ -26,6 +28,7 @@ interface EnrichedData {
   trailer_key: string | null
   cast: CastMember[]
   director: string | null
+  directorId: number | null
   collection_name: string | null
   collection_movies: CollectionMovie[]
   providers: string[]
@@ -114,8 +117,7 @@ export default function MovieDetailPopup({
 
   const [reviews, setReviews] = useState<Review[]>([])
   const [reviewsLoading, setReviewsLoading] = useState(false)
-  const [myRating, setMyRating] = useState(0)
-  const [hoverRating, setHoverRating] = useState(0)
+  const [myRating, setMyRating] = useState(7)
   const [myComment, setMyComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitMsg, setSubmitMsg] = useState('')
@@ -126,11 +128,14 @@ export default function MovieDetailPopup({
   const [reminded, setReminded] = useState(false)
 
   // Watchlist
-  const [savedToWatchlist, setSavedToWatchlist] = useState(false)
-  const [savingWatchlist, setSavingWatchlist] = useState(false)
+  const [watchlistStatus, setWatchlistStatus] = useState<null | 'saved' | 'watched'>(null)
+  const [watchlistItemId, setWatchlistItemId] = useState<string | null>(null)
+  const [watchlistLoading, setWatchlistLoading] = useState(false)
 
-  // Actor popup
+  // Popups
   const [actorPopup, setActorPopup] = useState<{ id: number; name: string; profile: string | null } | null>(null)
+  const [directorPopup, setDirectorPopup] = useState<{ id: number; name: string } | null>(null)
+  const [reviewModalOpen, setReviewModalOpen] = useState(false)
 
   // Reviews için canonical title
   const reviewKey = (currentOriginalTitle && currentOriginalTitle !== currentTitle) ? currentOriginalTitle : currentTitle
@@ -159,6 +164,8 @@ export default function MovieDetailPopup({
       setNavStack([])
       setCurrentOverride(null)
       setActorPopup(null)
+      setDirectorPopup(null)
+      setReviewModalOpen(false)
     }
   }, [isOpen])
 
@@ -197,9 +204,9 @@ export default function MovieDetailPopup({
         }
         const fetchedBackdrop = details.backdrop_path ? `https://image.tmdb.org/t/p/w780${details.backdrop_path}` : null
         const fetchedOverview = details.overview || null
-        setEnriched({ trailer_key: trailer?.key || null, cast, director: directorEntry?.name || null, collection_name, collection_movies, providers: trProviders, fetchedBackdrop, fetchedOverview })
+        setEnriched({ trailer_key: trailer?.key || null, cast, director: directorEntry?.name || null, directorId: directorEntry?.id || null, collection_name, collection_movies, providers: trProviders, fetchedBackdrop, fetchedOverview })
       } catch {
-        setEnriched({ trailer_key: null, cast: [], director: null, collection_name: null, collection_movies: [], providers: [], fetchedBackdrop: null, fetchedOverview: null })
+        setEnriched({ trailer_key: null, cast: [], director: null, directorId: null, collection_name: null, collection_movies: [], providers: [], fetchedBackdrop: null, fetchedOverview: null })
       } finally {
         setLoadingEnrich(false)
       }
@@ -211,7 +218,7 @@ export default function MovieDetailPopup({
   useEffect(() => {
     if (!isOpen) return
     setReviewsLoading(true)
-    setMyRating(0)
+    setMyRating(7)
     setMyComment('')
     setSubmitMsg('')
     supabase
@@ -241,14 +248,20 @@ export default function MovieDetailPopup({
   // Watchlist durumu kontrol et
   useEffect(() => {
     if (!isOpen || !user || !currentTitle) return
-    setSavedToWatchlist(false)
+    setWatchlistStatus(null)
+    setWatchlistItemId(null)
     supabase
       .from('watchlist')
-      .select('id')
+      .select('id, status')
       .eq('user_id', user.id)
       .eq('title', currentTitle)
       .maybeSingle()
-      .then(({ data }) => { if (data) setSavedToWatchlist(true) })
+      .then(({ data }) => {
+        if (data) {
+          setWatchlistItemId(data.id)
+          setWatchlistStatus((data.status as 'saved' | 'watched') || 'saved')
+        }
+      })
   }, [isOpen, user, currentTitle])
 
   // Navigation
@@ -268,7 +281,8 @@ export default function MovieDetailPopup({
     setNavStack(prev => [...prev, current])
     setCurrentOverride(next)
     setEnriched(null)
-    setSavedToWatchlist(false)
+    setWatchlistStatus(null)
+    setWatchlistItemId(null)
     setReminded(false)
     setReminderOpen(false)
   }
@@ -279,19 +293,21 @@ export default function MovieDetailPopup({
     setNavStack(s => s.slice(0, -1))
     setCurrentOverride(navStack.length === 1 ? null : prev)
     if (navStack.length === 1) {
-      // Orijinal props'a dön
       setCurrentOverride(null)
     } else {
       setCurrentOverride(prev)
     }
     setEnriched(null)
-    setSavedToWatchlist(false)
+    setWatchlistStatus(null)
+    setWatchlistItemId(null)
     setReminded(false)
     setReminderOpen(false)
   }
 
   const handleSubmitReview = async () => {
-    if (!user || myRating === 0) return
+    if (!user) return
+    const modResult = moderateComment(myComment)
+    if (!modResult.approved) { setSubmitMsg(modResult.reason); return }
     setSubmitting(true)
     setSubmitMsg('')
     const userName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Kullanıcı'
@@ -367,20 +383,47 @@ export default function MovieDetailPopup({
     setReminderOpen(false)
   }
 
-  const handleSaveWatchlist = async () => {
+  const handleAddToList = async () => {
     if (!user) { signInWithGoogle(); return }
-    if (savedToWatchlist) return
-    setSavingWatchlist(true)
-    const { error } = await supabase.from('watchlist').insert({
+    if (watchlistStatus) return
+    setWatchlistLoading(true)
+    const { data, error } = await supabase.from('watchlist').insert({
       user_id: user.id,
       title: currentTitle,
       turkish_title: currentTurkishTitle || null,
       type: contentType || (currentMediaType === 'movie' ? 'film' : 'dizi'),
       year: year ?? (currentReleaseDate ? parseInt(currentReleaseDate.substring(0, 4)) : null),
       imdb: currentVoteAverage ?? imdb ?? null,
-    })
-    if (!error) setSavedToWatchlist(true)
-    setSavingWatchlist(false)
+      status: 'saved',
+    }).select('id').single()
+    if (!error && data) { setWatchlistStatus('saved'); setWatchlistItemId(data.id) }
+    setWatchlistLoading(false)
+  }
+
+  const handleMarkWatched = async () => {
+    if (!user) { signInWithGoogle(); return }
+    setWatchlistLoading(true)
+    if (watchlistStatus === 'watched') {
+      setWatchlistLoading(false)
+      return
+    }
+    if (watchlistItemId) {
+      await supabase.from('watchlist').update({ status: 'watched' }).eq('id', watchlistItemId)
+      setWatchlistStatus('watched')
+    } else {
+      const { data, error } = await supabase.from('watchlist').insert({
+        user_id: user.id,
+        title: currentTitle,
+        turkish_title: currentTurkishTitle || null,
+        type: contentType || (currentMediaType === 'movie' ? 'film' : 'dizi'),
+        year: year ?? (currentReleaseDate ? parseInt(currentReleaseDate.substring(0, 4)) : null),
+        imdb: currentVoteAverage ?? imdb ?? null,
+        status: 'watched',
+      }).select('id').single()
+      if (!error && data) { setWatchlistStatus('watched'); setWatchlistItemId(data.id) }
+    }
+    setWatchlistLoading(false)
+    setReviewModalOpen(true)
   }
 
   if (!isOpen) return null
@@ -495,23 +538,44 @@ export default function MovieDetailPopup({
               {currentReleaseDate && <span>{formatDateTR(currentReleaseDate)}</span>}
               {!currentReleaseDate && displayYear && <span>{displayYear}</span>}
               {displayRating != null && displayRating > 0 && <span>⭐ {typeof displayRating === 'number' ? displayRating.toFixed(1) : displayRating}</span>}
-              {enriched?.director && <span>🎬 {enriched.director}</span>}
+              {enriched?.director && (
+                enriched.directorId ? (
+                  <button
+                    onClick={() => setDirectorPopup({ id: enriched.directorId!, name: enriched.director! })}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#94a3b8', fontSize: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(148,163,184,0.4)' }}
+                  >
+                    🎬 {enriched.director}
+                  </button>
+                ) : <span>🎬 {enriched.director}</span>
+              )}
               {avgRating && <span style={{ color: '#f59e0b' }}>💬 {avgRating} ({reviews.length})</span>}
             </div>
 
-            {/* Listeme Ekle butonu */}
-            <div className="mt-2 mb-2">
+            {/* Listeme Ekle / İzledim butonları */}
+            <div className="mt-2 mb-2 flex gap-2">
               <button
-                onClick={handleSaveWatchlist}
-                disabled={savedToWatchlist || savingWatchlist}
+                onClick={handleAddToList}
+                disabled={!!watchlistStatus || watchlistLoading}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
                 style={{
-                  background: savedToWatchlist ? '#22c55e22' : '#ffffff10',
-                  color: savedToWatchlist ? '#22c55e' : '#94a3b8',
-                  border: savedToWatchlist ? '1px solid #22c55e44' : '1px solid rgba(255,255,255,0.08)',
+                  background: watchlistStatus ? '#f59e0b22' : '#ffffff10',
+                  color: watchlistStatus ? '#f59e0b' : '#94a3b8',
+                  border: watchlistStatus ? '1px solid #f59e0b44' : '1px solid rgba(255,255,255,0.08)',
                 }}
               >
-                {savedToWatchlist ? '✓ Listeme Eklendi' : savingWatchlist ? '...' : '+ Listeme Ekle'}
+                {watchlistStatus ? '✓ Listede' : watchlistLoading ? '...' : '⏳ Listeme Ekle'}
+              </button>
+              <button
+                onClick={handleMarkWatched}
+                disabled={watchlistStatus === 'watched' || watchlistLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
+                style={{
+                  background: watchlistStatus === 'watched' ? '#22c55e22' : '#ffffff10',
+                  color: watchlistStatus === 'watched' ? '#22c55e' : '#94a3b8',
+                  border: watchlistStatus === 'watched' ? '1px solid #22c55e44' : '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                {watchlistStatus === 'watched' ? '✓ İzlendi' : '✓ İzledim'}
               </button>
             </div>
 
@@ -637,14 +701,7 @@ export default function MovieDetailPopup({
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-semibold tracking-wide" style={{ color: '#64748b' }}>KULLANICI YORUMLARI</p>
                 {avgRating && (
-                  <div className="flex items-center gap-1">
-                    {[1,2,3,4,5].map(s => (
-                      <svg key={s} width="10" height="10" viewBox="0 0 24 24" fill={s <= Math.round(parseFloat(avgRating)) ? '#f59e0b' : 'none'} stroke="#f59e0b" strokeWidth="2">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                      </svg>
-                    ))}
-                    <span className="text-[10px] ml-1" style={{ color: '#94a3b8' }}>{avgRating} ({reviews.length})</span>
-                  </div>
+                  <span className="text-[10px]" style={{ color: '#f59e0b' }}>⭐ {avgRating} / 10 ({reviews.length} yorum)</span>
                 )}
               </div>
 
@@ -653,13 +710,7 @@ export default function MovieDetailPopup({
                 myExistingReview ? (
                   <div className="rounded-xl p-3 mb-4" style={{ background: '#0f172a' }}>
                     <div className="flex items-center justify-between mb-1">
-                      <div className="flex gap-0.5">
-                        {[1,2,3,4,5].map(s => (
-                          <svg key={s} width="14" height="14" viewBox="0 0 24 24" fill={s <= myExistingReview.rating ? '#f59e0b' : 'none'} stroke="#f59e0b" strokeWidth="2">
-                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                          </svg>
-                        ))}
-                      </div>
+                      <span className="text-sm font-bold" style={{ color: '#f59e0b' }}>{myExistingReview.rating.toFixed(1)}<span className="text-xs font-normal">/10</span></span>
                       <button
                         onClick={() => handleDeleteReview(myExistingReview.id)}
                         className="text-[10px] px-2 py-0.5 rounded-full"
@@ -680,22 +731,17 @@ export default function MovieDetailPopup({
                   </div>
                 ) : (
                   <div className="mb-4">
-                    <p className="text-xs mb-2" style={{ color: '#94a3b8' }}>Puanın:</p>
-                    <div className="flex gap-1 mb-3">
-                      {[1,2,3,4,5].map(s => (
-                        <button
-                          key={s}
-                          onMouseEnter={() => setHoverRating(s)}
-                          onMouseLeave={() => setHoverRating(0)}
-                          onClick={() => setMyRating(s)}
-                          className="transition-transform hover:scale-110"
-                        >
-                          <svg width="28" height="28" viewBox="0 0 24 24" fill={s <= (hoverRating || myRating) ? '#f59e0b' : 'none'} stroke="#f59e0b" strokeWidth="2">
-                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                          </svg>
-                        </button>
-                      ))}
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-xs" style={{ color: '#94a3b8' }}>Puanın</p>
+                      <span className="text-base font-bold" style={{ color: '#f59e0b' }}>{myRating.toFixed(1)}<span className="text-xs font-normal">/10</span></span>
                     </div>
+                    <input
+                      type="range" min="1" max="10" step="0.5"
+                      value={myRating}
+                      onChange={e => setMyRating(parseFloat(e.target.value))}
+                      className="w-full mb-3"
+                      style={{ accentColor: '#f59e0b' }}
+                    />
                     <textarea
                       value={myComment}
                       onChange={e => setMyComment(e.target.value)}
@@ -709,12 +755,9 @@ export default function MovieDetailPopup({
                     )}
                     <button
                       onClick={handleSubmitReview}
-                      disabled={myRating === 0 || submitting}
+                      disabled={submitting}
                       className="w-full py-2.5 rounded-xl text-sm font-semibold mt-2 transition-all"
-                      style={{
-                        background: myRating > 0 ? '#f59e0b' : '#ffffff10',
-                        color: myRating > 0 ? '#0a0a0f' : '#475569',
-                      }}
+                      style={{ background: '#f59e0b', color: '#0a0a0f', opacity: submitting ? 0.7 : 1 }}
                     >
                       {submitting ? 'Gönderiliyor...' : 'Yorumu Gönder'}
                     </button>
@@ -764,13 +807,7 @@ export default function MovieDetailPopup({
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="flex gap-0.5">
-                            {[1,2,3,4,5].map(s => (
-                              <svg key={s} width="10" height="10" viewBox="0 0 24 24" fill={s <= review.rating ? '#f59e0b' : 'none'} stroke="#f59e0b" strokeWidth="2">
-                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                              </svg>
-                            ))}
-                          </div>
+                          <span className="text-xs font-semibold" style={{ color: '#f59e0b' }}>{review.rating.toFixed(1)}/10</span>
                           <span className="text-[10px]" style={{ color: '#475569' }}>{relativeTime(review.created_at)}</span>
                         </div>
                       </div>
@@ -808,6 +845,41 @@ export default function MovieDetailPopup({
             })
           }}
           zIndex={60}
+        />
+      )}
+
+      {/* Yönetmen popup — z-[60] */}
+      {directorPopup && (
+        <PersonPopup
+          personId={directorPopup.id}
+          personName={directorPopup.name}
+          onClose={() => setDirectorPopup(null)}
+          mode="director"
+          onSelectFilm={(film: FilmNavItem) => {
+            setDirectorPopup(null)
+            navigateTo({
+              movieId: film.movieId,
+              mediaType: film.mediaType,
+              title: film.title,
+              originalTitle: film.originalTitle,
+              poster: film.poster,
+              backdrop: film.backdrop,
+              overview: film.overview,
+              releaseDate: film.releaseDate,
+              voteAverage: film.voteAverage,
+            })
+          }}
+          zIndex={60}
+        />
+      )}
+
+      {/* İzledim sonrası yorum popup — z-[70] */}
+      {reviewModalOpen && (
+        <ReviewAfterWatchModal
+          title={currentTitle}
+          originalTitle={currentOriginalTitle}
+          mediaType={currentMediaType}
+          onClose={() => setReviewModalOpen(false)}
         />
       )}
     </>

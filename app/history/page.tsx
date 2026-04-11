@@ -28,6 +28,13 @@ interface FavoriteActor {
   profile_path: string | null
 }
 
+interface FavoriteDirector {
+  id: string
+  director_id: number
+  director_name: string
+  profile_path: string | null
+}
+
 interface DetailState {
   tmdb_id: number | null
   media_type: 'movie' | 'tv'
@@ -41,21 +48,22 @@ interface DetailState {
   overview: string | null
 }
 
-type FilterType = 'all' | 'saved' | 'watched' | 'actors'
+type FilterType = 'saved' | 'watched' | 'actors' | 'directors'
 
 export default function History() {
   const { user, loading: authLoading, signInWithGoogle } = useAuth()
   const router = useRouter()
   const [items, setItems] = useState<WatchlistItem[]>([])
   const [favoriteActors, setFavoriteActors] = useState<FavoriteActor[]>([])
+  const [favoriteDirectors, setFavoriteDirectors] = useState<FavoriteDirector[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<FilterType>('all')
+  const [filter, setFilter] = useState<FilterType>('saved')
 
   // URL param ile başlangıç tab seçimi (profil sayfasından yönlendirme)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const tab = params.get('tab') as FilterType | null
-    if (tab === 'saved' || tab === 'watched' || tab === 'actors') {
+    if (tab === 'saved' || tab === 'watched' || tab === 'actors' || tab === 'directors') {
       setFilter(tab)
     }
   }, [])
@@ -63,6 +71,7 @@ export default function History() {
   const [detail, setDetail] = useState<DetailState | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [selectedActor, setSelectedActor] = useState<FavoriteActor | null>(null)
+  const [selectedDirector, setSelectedDirector] = useState<FavoriteDirector | null>(null)
 
   useEffect(() => {
     if (authLoading) return
@@ -70,9 +79,11 @@ export default function History() {
     Promise.all([
       supabase.from('watchlist').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase.from('favorite_actors').select('id, actor_id, actor_name, profile_path').eq('user_id', user.id).order('created_at', { ascending: false }),
-    ]).then(([watchlistRes, actorsRes]) => {
+      supabase.from('favorite_directors').select('id, director_id, director_name, profile_path').eq('user_id', user.id).order('created_at', { ascending: false }),
+    ]).then(([watchlistRes, actorsRes, directorsRes]) => {
       setItems(watchlistRes.data || [])
       setFavoriteActors(actorsRes.data || [])
+      setFavoriteDirectors(directorsRes.data || [])
       setLoading(false)
     })
   }, [user, authLoading])
@@ -148,15 +159,14 @@ export default function History() {
 
   const savedItems = items.filter(i => i.status === 'saved')
   const watchedItems = items.filter(i => i.status === 'watched')
-  const allItems = items
 
-  const filteredItems = filter === 'saved' ? savedItems : filter === 'watched' ? watchedItems : allItems
+  const filteredItems = filter === 'saved' ? savedItems : filter === 'watched' ? watchedItems : []
 
   const TABS = [
-    { key: 'all' as FilterType, label: 'Tümü', count: allItems.length },
     { key: 'saved' as FilterType, label: 'İzleme Listem', count: savedItems.length },
     { key: 'watched' as FilterType, label: 'İzlediklerim', count: watchedItems.length },
     { key: 'actors' as FilterType, label: 'Sevdiğim Oyuncular', count: favoriteActors.length },
+    { key: 'directors' as FilterType, label: 'Sevdiğim Yönetmenler', count: favoriteDirectors.length },
   ]
 
   return (
@@ -186,6 +196,17 @@ export default function History() {
           personName={selectedActor.actor_name}
           personProfile={selectedActor.profile_path ? `https://image.tmdb.org/t/p/w185${selectedActor.profile_path}` : null}
           onClose={() => setSelectedActor(null)}
+        />
+      )}
+
+      {/* PersonPopup for favorite directors */}
+      {selectedDirector && (
+        <PersonPopup
+          personId={selectedDirector.director_id}
+          personName={selectedDirector.director_name}
+          personProfile={selectedDirector.profile_path ? `https://image.tmdb.org/t/p/w185${selectedDirector.profile_path}` : null}
+          onClose={() => setSelectedDirector(null)}
+          mode="director"
         />
       )}
 
@@ -259,13 +280,49 @@ export default function History() {
           )
         )}
 
+        {/* Favori yönetmenler tab */}
+        {filter === 'directors' && (
+          favoriteDirectors.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="text-4xl mb-4">🎬</div>
+              <p style={{ color: '#94a3b8' }}>Henüz takip ettiğin yönetmen yok.</p>
+              <p className="text-sm mt-2" style={{ color: '#475569' }}>Film detaylarında yönetmen adına tıkla!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-3">
+              {favoriteDirectors.map(director => (
+                <button
+                  key={director.id}
+                  onClick={() => setSelectedDirector(director)}
+                  className="rounded-xl border p-3 text-center transition-all hover:scale-[1.02] active:scale-95"
+                  style={{ background: '#12121a', borderColor: '#f59e0b33' }}
+                >
+                  <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-2 border-2" style={{ borderColor: '#f59e0b' }}>
+                    {director.profile_path ? (
+                      <img
+                        src={`https://image.tmdb.org/t/p/w185${director.profile_path}`}
+                        alt={`${director.director_name} profil fotoğrafı`}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-2xl" style={{ background: '#1e293b' }}>🎬</div>
+                    )}
+                  </div>
+                  <p className="text-xs font-semibold leading-tight" style={{ color: '#f1f5f9' }}>{director.director_name}</p>
+                </button>
+              ))}
+            </div>
+          )
+        )}
+
         {/* Film/dizi listesi */}
-        {filter !== 'actors' && (
+        {(filter === 'saved' || filter === 'watched') && (
           filteredItems.length === 0 ? (
             <div className="text-center py-16">
               <div className="text-4xl mb-4">🎬</div>
               <p style={{ color: '#94a3b8' }}>
-                {filter === 'saved' ? 'İzleme listen boş.' : filter === 'watched' ? 'Henüz hiçbir şey izlemedin.' : 'Listelediğin bir şey yok.'}
+                {filter === 'saved' ? 'İzleme listen boş.' : 'Henüz hiçbir şey izlemedin.'}
               </p>
               <button
                 onClick={() => router.push('/quiz')}

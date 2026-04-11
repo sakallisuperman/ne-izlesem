@@ -46,6 +46,7 @@ interface PersonPopupProps {
   onClose: () => void
   onSelectFilm?: (film: FilmNavItem) => void
   zIndex?: number
+  mode?: 'actor' | 'director'
 }
 
 function formatDate(d: string | null): string | null {
@@ -79,7 +80,7 @@ function sortWithTopPopular(items: CreditItem[]): CreditItem[] {
 
 export default function PersonPopup({
   personId, personName, personProfile,
-  onClose, onSelectFilm, zIndex = 50,
+  onClose, onSelectFilm, zIndex = 50, mode = 'actor',
 }: PersonPopupProps) {
   const { user } = useAuth()
   const [detail, setDetail] = useState<PersonDetail | null>(null)
@@ -98,21 +99,25 @@ export default function PersonPopup({
   // Favori durumu kontrol et
   useEffect(() => {
     if (!user) return
-    supabase.from('favorite_actors')
+    const table = mode === 'director' ? 'favorite_directors' : 'favorite_actors'
+    const idCol = mode === 'director' ? 'director_id' : 'actor_id'
+    supabase.from(table)
       .select('id')
       .eq('user_id', user.id)
-      .eq('actor_id', personId)
+      .eq(idCol, personId)
       .maybeSingle()
       .then(({ data }) => { if (data) setIsFavorite(true) })
-  }, [user, personId])
+  }, [user, personId, mode])
 
-  // Oyuncu detayı + filmografi paralel çek
+  // Kişi detayı + filmografi paralel çek
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
     Promise.all([
       fetchCached(`https://api.themoviedb.org/3/person/${personId}?api_key=${apiKey}&language=tr-TR`) as Promise<any>,
       fetchCached(`https://api.themoviedb.org/3/person/${personId}/movie_credits?api_key=${apiKey}&language=tr-TR`) as Promise<any>,
-      fetchCached(`https://api.themoviedb.org/3/person/${personId}/tv_credits?api_key=${apiKey}&language=tr-TR`) as Promise<any>,
+      mode === 'actor'
+        ? fetchCached(`https://api.themoviedb.org/3/person/${personId}/tv_credits?api_key=${apiKey}&language=tr-TR`) as Promise<any>
+        : Promise.resolve({ cast: [], crew: [] }),
     ]).then(([personData, movieCredits, tvCredits]) => {
       setDetail({
         biography: personData.biography || null,
@@ -121,49 +126,70 @@ export default function PersonPopup({
         profile_path: personData.profile_path || null,
       })
 
-      // Filmler: sadece cast, dedup by id, filtrele, ilk 3 popular sonra tarihe göre
-      const rawMovies: CreditItem[] = (movieCredits.cast || [])
-        .filter((c: any) => !c.adult && (c.vote_average || 0) > 0)
-        .map((c: any) => ({
-          id: c.id,
-          media_type: 'movie' as const,
-          title: c.title || c.original_title || '',
-          original_title: c.original_title || c.title || '',
-          character: c.character || '',
-          poster_path: c.poster_path || null,
-          backdrop_path: c.backdrop_path || null,
-          overview: c.overview || null,
-          release_date: c.release_date || '',
-          vote_average: c.vote_average || 0,
-          popularity: c.popularity || 0,
-          vote_count: c.vote_count || 0,
-        }))
-      setMovies(sortWithTopPopular(dedupeById(rawMovies)))
+      if (mode === 'director') {
+        // Yönetmen modu: crew dizisinden job=Director olanları al
+        const rawMovies: CreditItem[] = (movieCredits.crew || [])
+          .filter((c: any) => c.job === 'Director' && !c.adult && (c.vote_average || 0) > 0)
+          .map((c: any) => ({
+            id: c.id,
+            media_type: 'movie' as const,
+            title: c.title || c.original_title || '',
+            original_title: c.original_title || c.title || '',
+            character: '',
+            poster_path: c.poster_path || null,
+            backdrop_path: c.backdrop_path || null,
+            overview: c.overview || null,
+            release_date: c.release_date || '',
+            vote_average: c.vote_average || 0,
+            popularity: c.popularity || 0,
+            vote_count: c.vote_count || 0,
+          }))
+        setMovies(sortWithTopPopular(dedupeById(rawMovies)))
+        setTvShows([])
+      } else {
+        // Oyuncu modu: cast dizisinden al
+        const rawMovies: CreditItem[] = (movieCredits.cast || [])
+          .filter((c: any) => !c.adult && (c.vote_average || 0) > 0)
+          .map((c: any) => ({
+            id: c.id,
+            media_type: 'movie' as const,
+            title: c.title || c.original_title || '',
+            original_title: c.original_title || c.title || '',
+            character: c.character || '',
+            poster_path: c.poster_path || null,
+            backdrop_path: c.backdrop_path || null,
+            overview: c.overview || null,
+            release_date: c.release_date || '',
+            vote_average: c.vote_average || 0,
+            popularity: c.popularity || 0,
+            vote_count: c.vote_count || 0,
+          }))
+        setMovies(sortWithTopPopular(dedupeById(rawMovies)))
 
-      // Diziler: sadece cast, dedup by id, filtrele, ilk 3 popular sonra tarihe göre
-      const rawTv: CreditItem[] = (tvCredits.cast || [])
-        .filter((c: any) => !c.adult && (c.vote_average || 0) > 0)
-        .map((c: any) => ({
-          id: c.id,
-          media_type: 'tv' as const,
-          title: c.name || c.original_name || '',
-          original_title: c.original_name || c.name || '',
-          character: c.character || '',
-          poster_path: c.poster_path || null,
-          backdrop_path: c.backdrop_path || null,
-          overview: c.overview || null,
-          release_date: c.first_air_date || '',
-          vote_average: c.vote_average || 0,
-          popularity: c.popularity || 0,
-          vote_count: c.vote_count || 0,
-        }))
-      setTvShows(sortWithTopPopular(dedupeById(rawTv)))
+        const rawTv: CreditItem[] = (tvCredits.cast || [])
+          .filter((c: any) => !c.adult && (c.vote_average || 0) > 0)
+          .map((c: any) => ({
+            id: c.id,
+            media_type: 'tv' as const,
+            title: c.name || c.original_name || '',
+            original_title: c.original_name || c.name || '',
+            character: c.character || '',
+            poster_path: c.poster_path || null,
+            backdrop_path: c.backdrop_path || null,
+            overview: c.overview || null,
+            release_date: c.first_air_date || '',
+            vote_average: c.vote_average || 0,
+            popularity: c.popularity || 0,
+            vote_count: c.vote_count || 0,
+          }))
+        setTvShows(sortWithTopPopular(dedupeById(rawTv)))
+      }
     }).catch(() => {
       setDetail({ biography: null, birthday: null, place_of_birth: null, profile_path: null })
       setMovies([])
       setTvShows([])
     })
-  }, [personId])
+  }, [personId, mode])
 
   const handleFilmClick = (c: CreditItem) => {
     const filmItem: FilmNavItem = {
@@ -187,21 +213,23 @@ export default function PersonPopup({
   const toggleFavorite = async () => {
     if (!user || favLoading) return
     setFavLoading(true)
-    if (isFavorite) {
-      await supabase.from('favorite_actors')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('actor_id', personId)
-      setIsFavorite(false)
+    const profilePath = detail?.profile_path || personProfile || null
+    if (mode === 'director') {
+      if (isFavorite) {
+        await supabase.from('favorite_directors').delete().eq('user_id', user.id).eq('director_id', personId)
+        setIsFavorite(false)
+      } else {
+        await supabase.from('favorite_directors').insert({ user_id: user.id, director_id: personId, director_name: personName, profile_path: profilePath })
+        setIsFavorite(true)
+      }
     } else {
-      const profilePath = detail?.profile_path || personProfile || null
-      await supabase.from('favorite_actors').insert({
-        user_id: user.id,
-        actor_id: personId,
-        actor_name: personName,
-        profile_path: profilePath,
-      })
-      setIsFavorite(true)
+      if (isFavorite) {
+        await supabase.from('favorite_actors').delete().eq('user_id', user.id).eq('actor_id', personId)
+        setIsFavorite(false)
+      } else {
+        await supabase.from('favorite_actors').insert({ user_id: user.id, actor_id: personId, actor_name: personName, profile_path: profilePath })
+        setIsFavorite(true)
+      }
     }
     setFavLoading(false)
   }
@@ -327,7 +355,7 @@ export default function PersonPopup({
             </div>
             <h2 style={{ color: '#f1f5f9', fontSize: '20px', fontWeight: 700, textAlign: 'center', margin: 0 }}>{personName}</h2>
             <span style={{ marginTop: '6px', fontSize: '11px', padding: '3px 12px', borderRadius: '999px', fontWeight: 600, background: '#7F77DD22', color: '#7F77DD', border: '1px solid #7F77DD44' }}>
-              Oyuncu
+              {mode === 'director' ? 'Yönetmen' : 'Oyuncu'}
             </span>
             {/* Favori butonu */}
             {user && (
@@ -347,7 +375,9 @@ export default function PersonPopup({
                   transition: 'all 0.2s',
                 }}
               >
-                {isFavorite ? '💛 Favorilerde' : '❤️ Favorilere Ekle'}
+                {mode === 'director'
+                  ? (isFavorite ? '💛 Takiptesin' : '❤️ Yönetmeni Takip Et')
+                  : (isFavorite ? '💛 Favorilerde' : '❤️ Favorilere Ekle')}
               </button>
             )}
           </div>
@@ -369,8 +399,8 @@ export default function PersonPopup({
               )}
               {movies !== null && (
                 <div style={{ flex: 1, minWidth: '80px', background: '#0f172a', borderRadius: '10px', padding: '8px 10px', textAlign: 'center' }}>
-                  <p style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>YAPIM</p>
-                  <p style={{ color: '#f59e0b', fontSize: '14px', fontWeight: 700 }}>{totalCount}+</p>
+                  <p style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>{mode === 'director' ? 'FİLM' : 'YAPIM'}</p>
+                  <p style={{ color: '#f59e0b', fontSize: '14px', fontWeight: 700 }}>{mode === 'director' ? movies.length : `${totalCount}+`}</p>
                 </div>
               )}
             </div>
@@ -406,7 +436,7 @@ export default function PersonPopup({
               {movies.length > 0 && (
                 <div style={{ marginBottom: '20px' }}>
                   <p style={{ color: '#64748b', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', marginBottom: '10px' }}>
-                    FİLMLER ({movies.length})
+                    {mode === 'director' ? `YÖNETMENLİĞİNİ YAPTIĞI FİLMLER (${movies.length})` : `FİLMLER (${movies.length})`}
                   </p>
                   {renderGrid(movies)}
                 </div>

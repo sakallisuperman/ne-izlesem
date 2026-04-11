@@ -38,6 +38,8 @@ export default function Home() {
   const [loaded, setLoaded] = useState(false)
   const [posters, setPosters] = useState<string[]>([])
   const [popularMovies, setPopularMovies] = useState<PopularMovie[]>([])
+  const [popularPopup, setPopularPopup] = useState<{ tmdbId: number; mediaType: 'movie' | 'tv'; title: string; poster: string | null } | null>(null)
+  const [popularPopupLoading, setPopularPopupLoading] = useState(false)
   const { user } = useAuth()
   const [popup, setPopup] = useState<PickDetail | null>(null)
   const [greeting, setGreeting] = useState('')
@@ -129,6 +131,27 @@ export default function Home() {
     fetch('/api/popular').then(r => r.json()).then(d => setPopularMovies(d.movies || [])).catch(() => {})
   }, [])
 
+  const handlePopularClick = async (m: PopularMovie) => {
+    if (popularPopupLoading) return
+    setPopularPopupLoading(true)
+    const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
+    const mediaType = m.type === 'film' ? 'movie' : 'tv'
+    try {
+      const res = await fetch(`https://api.themoviedb.org/3/search/${mediaType}?api_key=${apiKey}&query=${encodeURIComponent(m.title)}&language=tr-TR`)
+      const data = await res.json()
+      const found = data.results?.[0]
+      if (found) {
+        setPopularPopup({
+          tmdbId: found.id,
+          mediaType: mediaType as 'movie' | 'tv',
+          title: found.title || found.name || m.title,
+          poster: m.poster || (found.poster_path ? `https://image.tmdb.org/t/p/w500${found.poster_path}` : null),
+        })
+      }
+    } catch {}
+    setPopularPopupLoading(false)
+  }
+
   return (
     <main className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: '#0a0a0f' }}>
       <div className="absolute inset-0 grid grid-cols-4 gap-1 p-1 opacity-[0.18]" style={{ animation: 'bgScroll 60s linear infinite', height: '200%', marginTop: '-50%' }}>
@@ -155,6 +178,25 @@ export default function Home() {
           imdb={popup.imdb}
           contentType={popup.type === 'film' ? 'film' : 'dizi'}
         />
+      )}
+
+      {popularPopup && (
+        <MovieDetailPopup
+          isOpen={!!popularPopup}
+          onClose={() => setPopularPopup(null)}
+          movieId={popularPopup.tmdbId}
+          mediaType={popularPopup.mediaType}
+          title={popularPopup.title}
+          poster={popularPopup.poster}
+          backdrop={null}
+          overview={null}
+        />
+      )}
+
+      {popularPopupLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: '#000000aa' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '3px solid #f59e0b33', borderTopColor: '#f59e0b', animation: 'spin 0.8s linear infinite' }} />
+        </div>
       )}
 
       {/* Hatırlatıcı banner */}
@@ -231,25 +273,34 @@ export default function Home() {
               </div>
               <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                 {popularMovies.map((m, i) => (
-                  <div key={i} className="flex-shrink-0 rounded-xl overflow-hidden border" style={{ width: '80px', background: '#12121a', borderColor: 'rgba(255,255,255,0.06)' }}>
+                  <button
+                    key={i}
+                    onClick={() => handlePopularClick(m)}
+                    className="flex-shrink-0 rounded-xl overflow-hidden border text-left"
+                    style={{ width: '140px', background: '#12121a', borderColor: 'rgba(255,255,255,0.06)', cursor: 'pointer', padding: 0, transition: 'transform 0.15s' }}
+                    onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)' }}
+                    onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                  >
                     {m.poster ? (
-                      <div className="relative" style={{ height: '108px' }}>
-                        <img src={m.poster} alt={m.title} className="w-full h-full object-cover" loading="lazy" />
-                        <div className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-center" style={{ background: 'linear-gradient(0deg, #12121a, transparent)' }}>
-                          <span className="text-[8px]" style={{ color: '#f59e0b' }}>👁 {m.watch_count}</span>
+                      <div className="relative" style={{ paddingBottom: '150%', position: 'relative' }}>
+                        <img src={m.poster} alt={m.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+                        <div className="absolute bottom-0 left-0 right-0 px-1 py-1" style={{ background: 'linear-gradient(0deg, #12121aee, transparent)' }}>
+                          <span className="text-[9px]" style={{ color: '#f59e0b' }}>👁 {m.watch_count}</span>
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-center" style={{ height: '108px', background: 'linear-gradient(135deg, #1a1a2e, #16213e)' }}>
-                        <span style={{ fontSize: '24px' }}>🎬</span>
+                      <div style={{ paddingBottom: '150%', position: 'relative' }}>
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #1a1a2e, #16213e)' }}>
+                          <span style={{ fontSize: '28px' }}>🎬</span>
+                        </div>
                       </div>
                     )}
-                    <div className="px-1.5 py-1.5">
-                      <p className="text-[9px] leading-tight font-medium" style={{ color: '#cbd5e1', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                        {m.turkish_title || m.title}
+                    <div className="px-2 py-1.5">
+                      <p className="text-[10px] leading-tight font-medium" style={{ color: '#cbd5e1', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>
+                        {(m.turkish_title || m.title).substring(0, 16)}{(m.turkish_title || m.title).length > 16 ? '…' : ''}
                       </p>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>

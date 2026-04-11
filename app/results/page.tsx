@@ -362,7 +362,7 @@ export default function Results() {
         {/* Reverse loading */}
         {activeTab === 'reverse' && reverseLoading && (
           <div className="flex flex-col items-center py-16">
-            <div className="text-5xl mb-4 animate-bounce">🔄</div>
+            <div className="mb-4" style={{ width: '32px', height: '32px', borderRadius: '50%', border: '3px solid #f59e0b33', borderTopColor: '#f59e0b', animation: 'spin 0.8s linear infinite' }} />
             <p className="text-sm font-medium" style={{ color: '#7F77DD' }}>Tam tersini arıyoruz...</p>
           </div>
         )}

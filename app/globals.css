@@ -44,3 +44,7 @@ html {
 .page-enter {
   animation: pageFadeIn 0.35s ease forwards;
 }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
