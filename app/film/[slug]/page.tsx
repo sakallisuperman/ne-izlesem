@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { getFilmAwards } from '@/lib/awards'
 import { formatDateTR } from '@/lib/utils'
 import { fetchCached } from '@/lib/tmdbCache'
+import { moderateComment } from '@/lib/moderation'
 
 interface CastMember {
   id: number
@@ -66,8 +67,7 @@ export default function FilmPage() {
   const [notFound, setNotFound] = useState(false)
 
   const [reviews, setReviews] = useState<Review[]>([])
-  const [myRating, setMyRating] = useState(0)
-  const [hoverRating, setHoverRating] = useState(0)
+  const [myRating, setMyRating] = useState(7)
   const [myComment, setMyComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitMsg, setSubmitMsg] = useState('')
@@ -150,7 +150,9 @@ export default function FilmPage() {
   }, [film])
 
   const handleSubmitReview = async () => {
-    if (!user || !film || myRating === 0) return
+    if (!user || !film) return
+    const modResult = moderateComment(myComment)
+    if (!modResult.approved) { setSubmitMsg(modResult.reason); return }
     setSubmitting(true)
     const reviewKey = film.original_title && film.original_title !== film.title ? film.original_title : film.title
     const userName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Kullanıcı'
@@ -164,7 +166,7 @@ export default function FilmPage() {
         id: crypto.randomUUID(), user_id: user.id, user_name: userName,
         rating: myRating, comment: myComment.trim() || null, created_at: new Date().toISOString(),
       }, ...prev])
-      setMyRating(0); setMyComment(''); setSubmitMsg('Yorumun eklendi! 🎉')
+      setMyRating(7); setMyComment(''); setSubmitMsg('Yorumun eklendi! 🎉')
     } else {
       setSubmitMsg('Hata oluştu, tekrar dene.')
     }
@@ -314,36 +316,26 @@ export default function FilmPage() {
             myExistingReview ? (
               <div className="rounded-xl p-3 mb-4" style={{ background: '#12121a' }}>
                 <div className="flex items-center justify-between mb-1">
-                  <div className="flex gap-0.5">
-                    {[1,2,3,4,5].map(s => (
-                      <svg key={s} width="14" height="14" viewBox="0 0 24 24" fill={s <= myExistingReview.rating ? '#f59e0b' : 'none'} stroke="#f59e0b" strokeWidth="2">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                      </svg>
-                    ))}
-                  </div>
+                  <span className="text-sm font-bold" style={{ color: '#f59e0b' }}>{myExistingReview.rating.toFixed(1)}<span className="text-xs font-normal">/10</span></span>
                   <button onClick={() => handleDeleteReview(myExistingReview.id)} className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: '#ef444422', color: '#ef4444' }}>Sil</button>
                 </div>
                 {myExistingReview.comment && <p className="text-xs" style={{ color: '#cbd5e1' }}>{myExistingReview.comment}</p>}
               </div>
             ) : (
               <div className="mb-4">
-                <p className="text-xs mb-2" style={{ color: '#94a3b8' }}>Puanın:</p>
-                <div className="flex gap-1 mb-3">
-                  {[1,2,3,4,5].map(s => (
-                    <button key={s} onMouseEnter={() => setHoverRating(s)} onMouseLeave={() => setHoverRating(0)} onClick={() => setMyRating(s)} className="transition-transform hover:scale-110">
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill={s <= (hoverRating || myRating) ? '#f59e0b' : 'none'} stroke="#f59e0b" strokeWidth="2">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                      </svg>
-                    </button>
-                  ))}
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs" style={{ color: '#94a3b8' }}>Puanın</p>
+                  <span className="text-base font-bold" style={{ color: '#f59e0b' }}>{myRating.toFixed(1)}<span className="text-xs font-normal">/10</span></span>
                 </div>
+                <input type="range" min="1" max="10" step="0.5" value={myRating} onChange={e => setMyRating(parseFloat(e.target.value))}
+                  className="w-full mb-3" style={{ accentColor: '#f59e0b' }} />
                 <textarea value={myComment} onChange={e => setMyComment(e.target.value)} placeholder="Yorumunuzu yazın... (isteğe bağlı)" rows={2}
                   className="w-full rounded-xl px-3 py-2.5 text-sm resize-none outline-none"
                   style={{ background: '#12121a', color: '#f1f5f9', border: '1px solid rgba(255,255,255,0.08)' }} />
                 {submitMsg && <p className="text-xs mt-1" style={{ color: submitMsg.includes('eklendi') ? '#22c55e' : '#ef4444' }}>{submitMsg}</p>}
-                <button onClick={handleSubmitReview} disabled={myRating === 0 || submitting}
+                <button onClick={handleSubmitReview} disabled={submitting}
                   className="w-full py-2.5 rounded-xl text-sm font-semibold mt-2"
-                  style={{ background: myRating > 0 ? '#f59e0b' : '#ffffff10', color: myRating > 0 ? '#0a0a0f' : '#475569' }}>
+                  style={{ background: '#f59e0b', color: '#0a0a0f', opacity: submitting ? 0.7 : 1 }}>
                   {submitting ? 'Gönderiliyor...' : 'Yorumu Gönder'}
                 </button>
               </div>
@@ -364,21 +356,15 @@ export default function FilmPage() {
                       <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: '#f59e0b22', color: '#f59e0b' }}>
                         {review.user_name.charAt(0).toUpperCase()}
                       </div>
-                      <span className="text-xs font-medium" style={{ color: '#cbd5e1' }}>{review.user_name.split(' ')[0]}</span>
+                      <a href={`/user/${review.user_id}`} className="text-xs font-medium hover:underline" style={{ color: '#cbd5e1', textDecoration: 'none' }}>{review.user_name.split(' ')[0]}</a>
                       {badgesMap[review.user_id] && (
                         <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: '#f59e0b15', color: '#f59e0b' }}>
                           {BADGE_EMOJIS[badgesMap[review.user_id]] || ''} {badgesMap[review.user_id]}
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <div className="flex gap-0.5">
-                        {[1,2,3,4,5].map(s => (
-                          <svg key={s} width="10" height="10" viewBox="0 0 24 24" fill={s <= review.rating ? '#f59e0b' : 'none'} stroke="#f59e0b" strokeWidth="2">
-                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                          </svg>
-                        ))}
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold" style={{ color: '#f59e0b' }}>{review.rating.toFixed(1)}/10</span>
                       <span className="text-[10px]" style={{ color: '#475569' }}>{relativeTime(review.created_at)}</span>
                     </div>
                   </div>

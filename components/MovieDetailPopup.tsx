@@ -795,7 +795,7 @@ export default function MovieDetailPopup({
                           <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: '#f59e0b22', color: '#f59e0b' }}>
                             {review.user_name.charAt(0).toUpperCase()}
                           </div>
-                          <span className="text-xs font-medium" style={{ color: '#cbd5e1' }}>{review.user_name.split(' ')[0]}</span>
+                          <a href={`/user/${review.user_id}`} onClick={e => e.stopPropagation()} className="text-xs font-medium hover:underline" style={{ color: '#cbd5e1', textDecoration: 'none' }}>{review.user_name.split(' ')[0]}</a>
                           {badgesMap[review.user_id] && (
                             <span
                               className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"

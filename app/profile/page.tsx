@@ -40,10 +40,10 @@ const BADGE_THRESHOLDS = [
 
 const PLATFORMS = ['Netflix', 'Amazon Prime', 'Disney+', 'BluTV', 'MUBI', 'Exxen', 'Gain', 'HBO Max', 'Tabii']
 
-function StarRow({ rating }: { rating: number }) {
+function RatingBadge({ rating }: { rating: number }) {
   return (
-    <span style={{ color: '#f59e0b', fontSize: '12px' }}>
-      {'★'.repeat(rating)}{'☆'.repeat(5 - rating)}
+    <span className="text-sm font-bold" style={{ color: '#f59e0b' }}>
+      {rating.toFixed(1)}<span className="text-xs font-normal">/10</span>
     </span>
   )
 }
@@ -82,6 +82,12 @@ export default function Profile() {
   const [savingPlatforms, setSavingPlatforms] = useState(false)
   const [platformsSaved, setPlatformsSaved]   = useState(false)
 
+  const [nickname, setNickname]           = useState<string | null>(null)
+  const [nicknameInput, setNicknameInput] = useState('')
+  const [savingNickname, setSavingNickname] = useState(false)
+  const [nicknameSaved, setNicknameSaved]   = useState(false)
+  const [nicknameError, setNicknameError]   = useState('')
+
   // Popup states
   const [reviewsPopup, setReviewsPopup]         = useState(false)
   const [actorsPopup, setActorsPopup]           = useState(false)
@@ -97,7 +103,7 @@ export default function Profile() {
       supabase.from('watchlist').select('status').eq('user_id', user.id),
       supabase.from('reviews').select('id, movie_title, movie_type, rating, comment, created_at').eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase.from('user_points').select('total_points, badge').eq('user_id', user.id).maybeSingle(),
-      supabase.from('profiles').select('preferred_platforms').eq('id', user.id).maybeSingle(),
+      supabase.from('profiles').select('preferred_platforms, nickname').eq('id', user.id).maybeSingle(),
       supabase.from('favorite_actors').select('id, actor_id, actor_name, profile_path').eq('user_id', user.id).order('created_at', { ascending: false }),
     ]).then(([wlRes, revRes, pointsRes, profileRes, actorsRes]) => {
       const items = wlRes.data || []
@@ -119,6 +125,9 @@ export default function Profile() {
       if (profileRes.data?.preferred_platforms) {
         setPlatforms(profileRes.data.preferred_platforms)
       }
+      const nick = profileRes.data?.nickname || null
+      setNickname(nick)
+      if (nick) setNicknameInput(nick)
       setStatsLoading(false)
     })
   }, [user])
@@ -140,6 +149,27 @@ export default function Profile() {
     setSavingPlatforms(false)
     setPlatformsSaved(true)
     setTimeout(() => setPlatformsSaved(false), 2000)
+  }
+
+  const saveNickname = async () => {
+    if (!user) return
+    const trimmed = nicknameInput.trim()
+    if (!trimmed || trimmed.length < 3) { setNicknameError('En az 3 karakter olmalı.'); return }
+    if (trimmed.length > 20) { setNicknameError('En fazla 20 karakter olabilir.'); return }
+    if (!/^[a-zA-Z0-9_çÇğĞıİöÖşŞüÜ]+$/.test(trimmed)) { setNicknameError('Sadece harf, rakam ve _ kullanabilirsin.'); return }
+    setSavingNickname(true)
+    setNicknameError('')
+    const { error } = await supabase.from('profiles').upsert({ id: user.id, nickname: trimmed }, { onConflict: 'id' })
+    if (error?.code === '23505') {
+      setNicknameError('Bu kullanıcı adı zaten alınmış.')
+    } else if (error) {
+      setNicknameError('Hata oluştu, tekrar dene.')
+    } else {
+      setNickname(trimmed)
+      setNicknameSaved(true)
+      setTimeout(() => setNicknameSaved(false), 2000)
+    }
+    setSavingNickname(false)
   }
 
   const badgeInfo    = BADGE_THRESHOLDS.find(b => b.name === badge) || BADGE_THRESHOLDS[0]
@@ -207,7 +237,7 @@ export default function Profile() {
                         {rev.movie_type === 'film' ? 'Film' : 'Dizi'}
                       </span>
                     </div>
-                    <StarRow rating={rev.rating} />
+                    <RatingBadge rating={rev.rating} />
                     {rev.comment && (
                       <p className="text-xs mt-1.5 leading-relaxed" style={{ color: '#94a3b8' }}>{rev.comment}</p>
                     )}
@@ -298,7 +328,37 @@ export default function Profile() {
           <h1 className="text-xl font-bold" style={{ color: '#f1f5f9' }}>
             {user.user_metadata?.full_name || 'Kullanıcı'}
           </h1>
-          <p className="text-sm" style={{ color: '#94a3b8' }}>{user.email}</p>
+          {nickname ? (
+            <span className="text-sm mt-1 px-3 py-0.5 rounded-full font-medium" style={{ background: '#f59e0b22', color: '#f59e0b' }}>@{nickname}</span>
+          ) : (
+            <span className="text-xs mt-1" style={{ color: '#475569' }}>Kullanıcı adı belirlenmedi</span>
+          )}
+          <p className="text-xs mt-1" style={{ color: '#64748b' }}>{user.email}</p>
+        </div>
+
+        {/* ─── Nickname Kartı ─── */}
+        <div className="rounded-2xl p-5 mb-6 border" style={{ background: '#12121a', borderColor: nickname ? '#f59e0b22' : '#ffffff10' }}>
+          <p className="text-sm font-semibold mb-1" style={{ color: '#f1f5f9' }}>Kullanıcı Adı</p>
+          <p className="text-xs mb-3" style={{ color: '#64748b' }}>Diğer kullanıcılar seni bu isimle görür.</p>
+          <div className="flex gap-2">
+            <input
+              value={nicknameInput}
+              onChange={e => { setNicknameInput(e.target.value); setNicknameError('') }}
+              placeholder="örn: sinefil42"
+              maxLength={20}
+              className="flex-1 rounded-xl px-3 py-2.5 text-sm outline-none"
+              style={{ background: '#0f172a', color: '#f1f5f9', border: '1px solid rgba(255,255,255,0.08)' }}
+            />
+            <button
+              onClick={saveNickname}
+              disabled={savingNickname}
+              className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+              style={{ background: nicknameSaved ? '#22c55e22' : '#f59e0b', color: nicknameSaved ? '#22c55e' : '#0a0a0f', opacity: savingNickname ? 0.7 : 1 }}
+            >
+              {nicknameSaved ? '✓' : savingNickname ? '...' : 'Kaydet'}
+            </button>
+          </div>
+          {nicknameError && <p className="text-xs mt-2" style={{ color: '#ef4444' }}>{nicknameError}</p>}
         </div>
 
         {/* ─── Rozet Kartı ─── */}
