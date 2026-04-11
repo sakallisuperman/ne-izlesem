@@ -103,9 +103,16 @@ export default function Profile() {
   // Messages state
   const [messagesPopup, setMessagesPopup]           = useState(false)
   const [unreadCount, setUnreadCount]               = useState(0)
-  const [conversations, setConversations]           = useState<{ sender_id: string; sender_nickname: string; last_msg: string; unread: number; created_at: string }[]>([])
-  const [activeConvo, setActiveConvo]               = useState<string | null>(null) // sender_id
+  const [conversations, setConversations]           = useState<{ other_id: string; other_nickname: string; last_msg: string; unread: number; created_at: string }[]>([])
+  const [activeConvo, setActiveConvo]               = useState<string | null>(null) // other user id
   const [convoMessages, setConvoMessages]           = useState<{ id: string; sender_id: string; content: string; created_at: string; is_read: boolean }[]>([])
+  const [newMsgText, setNewMsgText]                 = useState('')
+  const [sendingMsg, setSendingMsg]                 = useState(false)
+
+  // Review popup state — tıklanabilir film için
+  const [reviewFilmPopup, setReviewFilmPopup]       = useState<{ title: string; mediaType: 'movie' | 'tv' } | null>(null)
+  const [reviewFilmLoading, setReviewFilmLoading]   = useState(false)
+  const [reviewFilmDetail, setReviewFilmDetail]     = useState<{ tmdbId: number; mediaType: 'movie' | 'tv'; title: string; poster: string | null } | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -155,43 +162,86 @@ export default function Profile() {
     if (!user) return
     setMessagesPopup(true)
     setActiveConvo(null)
-    // Fetch all received messages
+    setConvoMessages([])
+    // Tüm mesajları çek (gönderilen + alınan)
     const { data: msgs } = await supabase.from('messages')
-      .select('id, sender_id, content, is_read, created_at')
-      .eq('receiver_id', user.id)
+      .select('id, sender_id, receiver_id, content, is_read, created_at')
+      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
       .order('created_at', { ascending: false })
-    if (!msgs) return
-    // Group by sender
-    const senderIds = Array.from(new Set(msgs.map((m: any) => m.sender_id as string)))
-    const { data: profiles } = await supabase.from('profiles').select('id, nickname').in('id', senderIds)
+    if (!msgs || msgs.length === 0) { setConversations([]); return }
+    // Her mesajdaki karşı tarafı bul
+    const otherIds = Array.from(new Set(msgs.map((m: any) =>
+      m.sender_id === user.id ? m.receiver_id as string : m.sender_id as string
+    )))
+    const { data: profiles } = await supabase.from('profiles').select('id, nickname').in('id', otherIds)
     const nicknameMap: Record<string, string> = {}
     if (profiles) profiles.forEach((p: any) => { nicknameMap[p.id] = p.nickname || p.id.slice(0, 8) })
-    const convos = senderIds.map(sid => {
-      const senderMsgs = msgs.filter((m: any) => m.sender_id === sid)
+    // Group by other user — son mesaj başta
+    const convos = otherIds.map(oid => {
+      const thread = msgs.filter((m: any) => m.sender_id === oid || m.receiver_id === oid)
+      const unread = thread.filter((m: any) => m.receiver_id === user.id && !m.is_read).length
       return {
-        sender_id: sid,
-        sender_nickname: nicknameMap[sid] || sid.slice(0, 8),
-        last_msg: senderMsgs[0]?.content || '',
-        unread: senderMsgs.filter((m: any) => !m.is_read).length,
-        created_at: senderMsgs[0]?.created_at || '',
+        other_id: oid,
+        other_nickname: nicknameMap[oid] || oid.slice(0, 8),
+        last_msg: thread[0]?.content || '',
+        unread,
+        created_at: thread[0]?.created_at || '',
       }
     })
     setConversations(convos)
   }
 
-  const openConversation = async (senderId: string) => {
+  const openConversation = async (otherId: string) => {
     if (!user) return
-    setActiveConvo(senderId)
+    setActiveConvo(otherId)
+    setNewMsgText('')
     const { data: msgs } = await supabase.from('messages')
-      .select('id, sender_id, content, is_read, created_at')
-      .or(`and(sender_id.eq.${senderId},receiver_id.eq.${user.id}),and(sender_id.eq.${user.id},receiver_id.eq.${senderId})`)
+      .select('id, sender_id, receiver_id, content, is_read, created_at')
+      .or(`and(sender_id.eq.${otherId},receiver_id.eq.${user.id}),and(sender_id.eq.${user.id},receiver_id.eq.${otherId})`)
       .order('created_at', { ascending: true })
     setConvoMessages(msgs || [])
-    // Mark as read
-    await supabase.from('messages').update({ is_read: true }).eq('sender_id', senderId).eq('receiver_id', user.id).eq('is_read', false)
-    const convoUnread = conversations.find(c => c.sender_id === senderId)?.unread ?? 0
+    // Okunmamışları okundu olarak işaretle
+    await supabase.from('messages').update({ is_read: true }).eq('sender_id', otherId).eq('receiver_id', user.id).eq('is_read', false)
+    const convoUnread = conversations.find(c => c.other_id === otherId)?.unread ?? 0
     setUnreadCount(c => Math.max(0, c - convoUnread))
-    setConversations(prev => prev.map(c => c.sender_id === senderId ? { ...c, unread: 0 } : c))
+    setConversations(prev => prev.map(c => c.other_id === otherId ? { ...c, unread: 0 } : c))
+  }
+
+  const sendMessage = async () => {
+    if (!user || !activeConvo || !newMsgText.trim() || sendingMsg) return
+    setSendingMsg(true)
+    const content = newMsgText.trim()
+    const { data, error } = await supabase.from('messages').insert({
+      sender_id: user.id,
+      receiver_id: activeConvo,
+      content,
+    }).select('id, sender_id, receiver_id, content, is_read, created_at').single()
+    if (!error && data) {
+      setConvoMessages(prev => [...prev, data])
+      setConversations(prev => prev.map(c => c.other_id === activeConvo ? { ...c, last_msg: content } : c))
+    }
+    setNewMsgText('')
+    setSendingMsg(false)
+  }
+
+  const openReviewFilm = async (title: string, type: string) => {
+    setReviewFilmLoading(true)
+    const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
+    const mediaType = type === 'film' ? 'movie' : 'tv'
+    try {
+      const res = await fetch(`https://api.themoviedb.org/3/search/${mediaType}?api_key=${apiKey}&query=${encodeURIComponent(title)}&language=tr-TR`)
+      const data = await res.json()
+      const found = data.results?.[0]
+      if (found) {
+        setReviewFilmDetail({
+          tmdbId: found.id,
+          mediaType: mediaType as 'movie' | 'tv',
+          title: found.title || found.name || title,
+          poster: found.poster_path ? `https://image.tmdb.org/t/p/w500${found.poster_path}` : null,
+        })
+      }
+    } catch {}
+    setReviewFilmLoading(false)
   }
 
   const togglePlatform = (p: string) => {
@@ -301,73 +351,112 @@ export default function Profile() {
       {/* ─── Mesajlar Popup ─── */}
       {messagesPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: '#000000cc' }} onClick={() => { setMessagesPopup(false); setActiveConvo(null) }}>
-          <div className="w-full max-w-md rounded-2xl border" style={{ background: '#12121a', borderColor: '#ffffff15', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: '#ffffff08' }}>
+          <div className="w-full max-w-md rounded-2xl border flex flex-col" style={{ background: '#12121a', borderColor: '#ffffff15', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b flex-shrink-0" style={{ borderColor: '#ffffff08' }}>
               <div className="flex items-center gap-2">
                 {activeConvo && (
-                  <button onClick={() => setActiveConvo(null)} className="text-sm" style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>← Geri</button>
+                  <button onClick={() => { setActiveConvo(null); setConvoMessages([]) }} className="text-sm btn-press" style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>← Geri</button>
                 )}
-                <h3 className="font-bold text-lg" style={{ color: '#f1f5f9' }}>
-                  {activeConvo ? `@${conversations.find(c => c.sender_id === activeConvo)?.sender_nickname}` : 'Mesajlarım'}
-                </h3>
+                <div className="flex items-center gap-2">
+                  {activeConvo && (
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2" style={{ background: '#f59e0b22', color: '#f59e0b', borderColor: '#f59e0b44' }}>
+                      {(conversations.find(c => c.other_id === activeConvo)?.other_nickname || '?')[0].toUpperCase()}
+                    </div>
+                  )}
+                  <h3 className="font-bold text-base" style={{ color: '#f1f5f9' }}>
+                    {activeConvo
+                      ? `@${conversations.find(c => c.other_id === activeConvo)?.other_nickname}`
+                      : 'Mesajlarım'}
+                  </h3>
+                </div>
               </div>
               <button onClick={() => { setMessagesPopup(false); setActiveConvo(null) }} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#ffffff10', color: '#94a3b8' }}>✕</button>
             </div>
 
+            {/* Body */}
             {!activeConvo ? (
-              conversations.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="text-4xl mb-3">✉️</div>
-                  <p style={{ color: '#64748b' }}>Henüz mesajın yok.</p>
-                  <p className="text-sm mt-1" style={{ color: '#475569' }}>Karşılıklı takip ettiğin kullanıcılar sana mesaj gönderebilir.</p>
-                </div>
-              ) : (
-                <div className="flex flex-col divide-y" style={{ borderColor: '#ffffff08' }}>
-                  {conversations.map(convo => (
-                    <button
-                      key={convo.sender_id}
-                      onClick={() => openConversation(convo.sender_id)}
-                      className="flex items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-white/5"
-                    >
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 border-2" style={{ background: '#f59e0b22', color: '#f59e0b', borderColor: '#f59e0b44' }}>
-                        {convo.sender_nickname[0].toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-semibold" style={{ color: '#f1f5f9' }}>@{convo.sender_nickname}</p>
-                          {convo.unread > 0 && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: '#f59e0b', color: '#0a0a0f' }}>{convo.unread}</span>
-                          )}
-                        </div>
-                        <p className="text-xs truncate mt-0.5" style={{ color: '#64748b' }}>{convo.last_msg}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )
-            ) : (
-              <div className="p-4 flex flex-col gap-2">
-                {convoMessages.map(msg => {
-                  const isMine = msg.sender_id === user?.id
-                  return (
-                    <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                      <div
-                        className="max-w-[75%] px-3 py-2 rounded-2xl text-sm"
-                        style={{
-                          background: isMine ? '#f59e0b' : '#1e293b',
-                          color: isMine ? '#0a0a0f' : '#f1f5f9',
-                          borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                        }}
+              <div className="overflow-y-auto flex-1">
+                {conversations.length === 0 ? (
+                  <div className="text-center py-12 px-6">
+                    <div className="text-4xl mb-3">✉️</div>
+                    <p style={{ color: '#64748b' }}>Henüz mesajın yok.</p>
+                    <p className="text-sm mt-1" style={{ color: '#475569' }}>Karşılıklı takip ettiğin kullanıcılar sana mesaj gönderebilir.</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col">
+                    {conversations.map(convo => (
+                      <button
+                        key={convo.other_id}
+                        onClick={() => openConversation(convo.other_id)}
+                        className="flex items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-white/5 border-b"
+                        style={{ borderColor: '#ffffff06' }}
                       >
-                        {msg.content}
-                        <p className="text-[9px] mt-1 opacity-60 text-right">
-                          {new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                    </div>
-                  )
-                })}
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 border-2" style={{ background: '#f59e0b22', color: '#f59e0b', borderColor: '#f59e0b44' }}>
+                          {convo.other_nickname[0].toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <p className="text-sm font-semibold" style={{ color: '#f1f5f9' }}>@{convo.other_nickname}</p>
+                            {convo.unread > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: '#f59e0b', color: '#0a0a0f' }}>{convo.unread}</span>
+                            )}
+                          </div>
+                          <p className="text-xs truncate" style={{ color: '#64748b' }}>{convo.last_msg}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+            ) : (
+              <>
+                {/* Mesaj baloncukları */}
+                <div className="overflow-y-auto flex-1 p-4 flex flex-col gap-2">
+                  {convoMessages.length === 0 && (
+                    <p className="text-center text-xs py-4" style={{ color: '#475569' }}>Henüz mesaj yok. İlk mesajı sen gönder!</p>
+                  )}
+                  {convoMessages.map(msg => {
+                    const isMine = msg.sender_id === user?.id
+                    return (
+                      <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                        <div
+                          className="max-w-[75%] px-3 py-2 text-sm"
+                          style={{
+                            background: isMine ? '#f59e0b' : '#1e293b',
+                            color: isMine ? '#0a0a0f' : '#f1f5f9',
+                            borderRadius: isMine ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                          }}
+                        >
+                          {msg.content}
+                          <p className="text-[9px] mt-1 opacity-60 text-right">
+                            {new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                {/* Mesaj gönder */}
+                <div className="px-4 py-3 border-t flex gap-2 flex-shrink-0" style={{ borderColor: '#ffffff08' }}>
+                  <input
+                    value={newMsgText}
+                    onChange={e => setNewMsgText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
+                    placeholder="Mesaj yaz..."
+                    className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
+                    style={{ background: '#0f172a', color: '#f1f5f9', border: '1px solid rgba(255,255,255,0.08)' }}
+                  />
+                  <button
+                    onClick={sendMessage}
+                    disabled={!newMsgText.trim() || sendingMsg}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 btn-press"
+                    style={{ background: '#f59e0b', opacity: (!newMsgText.trim() || sendingMsg) ? 0.5 : 1 }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0a0a0f" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -390,8 +479,14 @@ export default function Profile() {
               <div className="p-4 flex flex-col gap-3">
                 {userReviews.map(rev => (
                   <div key={rev.id} className="p-3 rounded-xl border" style={{ background: '#0f172a', borderColor: '#ffffff08' }}>
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="font-semibold text-sm" style={{ color: '#f1f5f9' }}>{rev.movie_title}</p>
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <button
+                        onClick={() => openReviewFilm(rev.movie_title, rev.movie_type)}
+                        className="font-semibold text-sm text-left transition-opacity hover:opacity-80"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f59e0b', padding: 0 }}
+                      >
+                        {rev.movie_title}
+                      </button>
                       <span className="text-[10px] px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: rev.movie_type === 'film' ? '#f59e0b22' : '#3b82f622', color: rev.movie_type === 'film' ? '#f59e0b' : '#60a5fa' }}>
                         {rev.movie_type === 'film' ? 'Film' : 'Dizi'}
                       </span>
@@ -409,6 +504,28 @@ export default function Profile() {
             )}
           </div>
         </div>
+      )}
+
+      {/* ReviewFilm loading spinner */}
+      {reviewFilmLoading && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center" style={{ background: '#000000aa' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '3px solid #f59e0b33', borderTopColor: '#f59e0b', animation: 'spin 0.8s linear infinite' }} />
+        </div>
+      )}
+
+      {/* ReviewFilm MovieDetailPopup */}
+      {reviewFilmDetail && (
+        <MovieDetailPopup
+          isOpen={!!reviewFilmDetail}
+          onClose={() => setReviewFilmDetail(null)}
+          movieId={reviewFilmDetail.tmdbId}
+          mediaType={reviewFilmDetail.mediaType}
+          title={reviewFilmDetail.title}
+          poster={reviewFilmDetail.poster}
+          backdrop={null}
+          overview={null}
+          zIndex={65}
+        />
       )}
 
       {/* ─── Favori Oyuncular Popup ─── */}

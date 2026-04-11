@@ -58,6 +58,13 @@ export default function UserProfilePage() {
   const [msgSending, setMsgSending] = useState(false)
   const [msgSent, setMsgSent] = useState(false)
 
+  // Followers / Following list popups
+  const [followersPopup, setFollowersPopup] = useState(false)
+  const [followingPopup, setFollowingPopup] = useState(false)
+  const [followersList, setFollowersList] = useState<{ id: string; nickname: string | null; badge: string | null }[]>([])
+  const [followingList, setFollowingList] = useState<{ id: string; nickname: string | null; badge: string | null }[]>([])
+  const [listLoading, setListLoading] = useState(false)
+
   useEffect(() => {
     if (!id) return
     Promise.all([
@@ -104,6 +111,46 @@ export default function UserProfilePage() {
       .maybeSingle()
       .then(({ data }) => { if (data) setTheyFollowMe(true) })
   }, [currentUser, id])
+
+  const openFollowers = async () => {
+    setFollowersPopup(true)
+    if (followersList.length > 0) return
+    setListLoading(true)
+    const { data } = await supabase
+      .from('follows')
+      .select('profiles!follows_follower_id_fkey(id, nickname)')
+      .eq('following_id', id)
+    const users = (data || []).map((r: any) => ({ id: r.profiles.id, nickname: r.profiles.nickname, badge: null }))
+    if (users.length > 0) {
+      const { data: pts } = await supabase.from('user_points').select('user_id, badge').in('user_id', users.map(u => u.id))
+      const bmap: Record<string, string> = {}
+      if (pts) pts.forEach((p: any) => { bmap[p.user_id] = p.badge })
+      setFollowersList(users.map(u => ({ ...u, badge: bmap[u.id] || null })))
+    } else {
+      setFollowersList([])
+    }
+    setListLoading(false)
+  }
+
+  const openFollowing = async () => {
+    setFollowingPopup(true)
+    if (followingList.length > 0) return
+    setListLoading(true)
+    const { data } = await supabase
+      .from('follows')
+      .select('profiles!follows_following_id_fkey(id, nickname)')
+      .eq('follower_id', id)
+    const users = (data || []).map((r: any) => ({ id: r.profiles.id, nickname: r.profiles.nickname, badge: null }))
+    if (users.length > 0) {
+      const { data: pts } = await supabase.from('user_points').select('user_id, badge').in('user_id', users.map(u => u.id))
+      const bmap: Record<string, string> = {}
+      if (pts) pts.forEach((p: any) => { bmap[p.user_id] = p.badge })
+      setFollowingList(users.map(u => ({ ...u, badge: bmap[u.id] || null })))
+    } else {
+      setFollowingList([])
+    }
+    setListLoading(false)
+  }
 
   const handleFollowToggle = async () => {
     if (!currentUser || followLoading) return
@@ -171,6 +218,74 @@ export default function UserProfilePage() {
         />
       )}
 
+      {/* Takipçiler Popup */}
+      {followersPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: '#000000cc' }} onClick={() => setFollowersPopup(false)}>
+          <div className="w-full max-w-sm rounded-2xl border" style={{ background: '#12121a', borderColor: '#ffffff15', maxHeight: '75vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: '#ffffff08' }}>
+              <h3 className="font-bold text-base" style={{ color: '#f1f5f9' }}>Takipçiler ({followerCount})</h3>
+              <button onClick={() => setFollowersPopup(false)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#ffffff10', color: '#94a3b8' }}>✕</button>
+            </div>
+            {listLoading ? (
+              <div className="flex justify-center py-8"><div className="w-5 h-5 rounded-full" style={{ border: '2px solid #f59e0b33', borderTopColor: '#f59e0b', animation: 'spin 0.8s linear infinite' }} /></div>
+            ) : followersList.length === 0 ? (
+              <p className="text-center py-8 text-sm" style={{ color: '#64748b' }}>Henüz takipçi yok.</p>
+            ) : (
+              <div className="flex flex-col p-3 gap-2">
+                {followersList.map(u => (
+                  <button key={u.id} onClick={() => { setFollowersPopup(false); router.push(`/user/${u.id}`) }}
+                    className="flex items-center gap-3 p-3 rounded-xl text-left transition-all hover:scale-[1.01]"
+                    style={{ background: '#0f172a' }}>
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 border-2" style={{ background: '#f59e0b22', color: '#f59e0b', borderColor: '#f59e0b44' }}>
+                      {(u.nickname || '?')[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold" style={{ color: '#f1f5f9' }}>@{u.nickname || 'Anonim'}</p>
+                      {u.badge && <span className="text-[9px]" style={{ color: '#f59e0b' }}>{BADGE_EMOJIS[u.badge] || ''} {u.badge}</span>}
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Takip Edilenler Popup */}
+      {followingPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: '#000000cc' }} onClick={() => setFollowingPopup(false)}>
+          <div className="w-full max-w-sm rounded-2xl border" style={{ background: '#12121a', borderColor: '#ffffff15', maxHeight: '75vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: '#ffffff08' }}>
+              <h3 className="font-bold text-base" style={{ color: '#f1f5f9' }}>Takip Edilenler ({followingCount})</h3>
+              <button onClick={() => setFollowingPopup(false)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#ffffff10', color: '#94a3b8' }}>✕</button>
+            </div>
+            {listLoading ? (
+              <div className="flex justify-center py-8"><div className="w-5 h-5 rounded-full" style={{ border: '2px solid #f59e0b33', borderTopColor: '#f59e0b', animation: 'spin 0.8s linear infinite' }} /></div>
+            ) : followingList.length === 0 ? (
+              <p className="text-center py-8 text-sm" style={{ color: '#64748b' }}>Henüz kimse takip edilmiyor.</p>
+            ) : (
+              <div className="flex flex-col p-3 gap-2">
+                {followingList.map(u => (
+                  <button key={u.id} onClick={() => { setFollowingPopup(false); router.push(`/user/${u.id}`) }}
+                    className="flex items-center gap-3 p-3 rounded-xl text-left transition-all hover:scale-[1.01]"
+                    style={{ background: '#0f172a' }}>
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 border-2" style={{ background: '#f59e0b22', color: '#f59e0b', borderColor: '#f59e0b44' }}>
+                      {(u.nickname || '?')[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold" style={{ color: '#f1f5f9' }}>@{u.nickname || 'Anonim'}</p>
+                      {u.badge && <span className="text-[9px]" style={{ color: '#f59e0b' }}>{BADGE_EMOJIS[u.badge] || ''} {u.badge}</span>}
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Mesaj Modal */}
       {msgModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: '#000000cc' }} onClick={() => setMsgModalOpen(false)}>
@@ -227,14 +342,14 @@ export default function UserProfilePage() {
 
           {/* Takipçi / Takip */}
           <div className="flex gap-6 mt-3">
-            <div className="text-center">
+            <button onClick={openFollowers} className="text-center btn-press" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
               <p className="text-lg font-bold" style={{ color: '#f1f5f9' }}>{followerCount}</p>
               <p className="text-[11px]" style={{ color: '#64748b' }}>Takipçi</p>
-            </div>
-            <div className="text-center">
+            </button>
+            <button onClick={openFollowing} className="text-center btn-press" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
               <p className="text-lg font-bold" style={{ color: '#f1f5f9' }}>{followingCount}</p>
               <p className="text-[11px]" style={{ color: '#64748b' }}>Takip</p>
-            </div>
+            </button>
           </div>
 
           {!isOwnProfile && currentUser && (
