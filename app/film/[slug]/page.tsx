@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { getFilmAwards } from '@/lib/awards'
@@ -59,10 +59,13 @@ function relativeTime(dateStr: string): string {
 export default function FilmPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, signInWithGoogle } = useAuth()
   const slug = decodeURIComponent((params.slug as string) || '')
+  const refUserId = searchParams.get('ref')
 
   const [film, setFilm] = useState<FilmData | null>(null)
+  const [referrerNickname, setReferrerNickname] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
@@ -126,6 +129,12 @@ export default function FilmPage() {
     }
     search()
   }, [slug])
+
+  useEffect(() => {
+    if (!refUserId) return
+    supabase.from('profiles').select('nickname').eq('id', refUserId).maybeSingle()
+      .then(({ data }) => { if (data?.nickname) setReferrerNickname(data.nickname) })
+  }, [refUserId])
 
   useEffect(() => {
     if (!film) return
@@ -211,8 +220,28 @@ export default function FilmPage() {
   const displayOriginal = film.original_title && film.original_title !== film.title ? film.original_title : null
   const awards = getFilmAwards(film.title, film.original_title)
 
+  const shareUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/film/${encodeURIComponent(slug)}${user ? `?ref=${user.id}` : ''}`
+    : ''
+
+  const handleShare = async () => {
+    const url = shareUrl
+    if (navigator.share) {
+      try { await navigator.share({ title: film.title, text: `"${film.title}" filmini izlemeni öneririm!`, url }) } catch {}
+    } else {
+      await navigator.clipboard.writeText(url)
+    }
+  }
+
   return (
     <main className="min-h-screen pb-16" style={{ background: '#0a0a0f' }}>
+      {/* Referrer banner */}
+      {referrerNickname && (
+        <div className="sticky top-0 z-10 w-full px-4 py-2.5 flex items-center justify-center gap-2" style={{ background: '#f59e0b', color: '#0a0a0f' }}>
+          <span className="text-sm font-semibold">🎬 @{referrerNickname} sana bu filmi önerdi!</span>
+        </div>
+      )}
+
       {/* Backdrop */}
       {film.backdrop && (
         <div className="relative w-full" style={{ height: '260px' }}>
@@ -234,6 +263,16 @@ export default function FilmPage() {
             {displayOriginal && <p className="text-sm mt-0.5" style={{ color: '#94a3b8' }}>{displayOriginal}</p>}
           </div>
         </div>
+
+        {/* Share */}
+        <button
+          onClick={handleShare}
+          className="mb-3 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border btn-press"
+          style={{ background: '#12121a', color: '#94a3b8', borderColor: '#ffffff15' }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          {user ? 'Arkadaşına Öner' : 'Paylaş'}
+        </button>
 
         {/* Meta */}
         <div className="flex flex-wrap gap-3 mb-2 text-sm" style={{ color: '#94a3b8' }}>

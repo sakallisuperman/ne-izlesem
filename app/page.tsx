@@ -138,6 +138,45 @@ export default function Home() {
     fetch('/api/popular').then(r => r.json()).then(d => setPopularMovies(d.movies || [])).catch(() => {})
   }, [])
 
+  const handleMoodSelect = async (mood: string) => {
+    if (moodLoading) return
+    setSelectedMood(mood)
+    setMoodLoading(true)
+    setMoodResult(null)
+    try {
+      const res = await fetch('/api/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers: { mood }, reverseMode: false, excludeTitles: [] }),
+      })
+      const data = await res.json()
+      const film = (data.recommendations || []).find((r: any) => r.type === 'film') || data.recommendations?.[0]
+      if (film) setMoodResult(film)
+    } catch {}
+    setMoodLoading(false)
+  }
+
+  const handleMoodResultClick = async () => {
+    if (!moodResult || moodPopupLoading) return
+    setMoodPopupLoading(true)
+    const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
+    const mediaType = moodResult.type === 'film' ? 'movie' : 'tv'
+    try {
+      const res = await fetch(`https://api.themoviedb.org/3/search/${mediaType}?api_key=${apiKey}&query=${encodeURIComponent(moodResult.title)}&language=tr-TR`)
+      const data = await res.json()
+      const found = data.results?.[0]
+      if (found) {
+        setMoodPopup({
+          tmdbId: found.id,
+          mediaType: mediaType as 'movie' | 'tv',
+          title: found.title || found.name || moodResult.title,
+          poster: found.poster_path ? `https://image.tmdb.org/t/p/w500${found.poster_path}` : null,
+        })
+      }
+    } catch {}
+    setMoodPopupLoading(false)
+  }
+
   const handlePopularClick = async (m: PopularMovie) => {
     if (popularPopupLoading) return
     setPopularPopupLoading(true)
@@ -198,6 +237,25 @@ export default function Home() {
           backdrop={null}
           overview={null}
         />
+      )}
+
+      {moodPopup && (
+        <MovieDetailPopup
+          isOpen={!!moodPopup}
+          onClose={() => setMoodPopup(null)}
+          movieId={moodPopup.tmdbId}
+          mediaType={moodPopup.mediaType}
+          title={moodPopup.title}
+          poster={moodPopup.poster}
+          backdrop={null}
+          overview={null}
+        />
+      )}
+
+      {moodPopupLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: '#000000aa' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '3px solid #f59e0b33', borderTopColor: '#f59e0b', animation: 'spin 0.8s linear infinite' }} />
+        </div>
       )}
 
       {popularPopupLoading && (
@@ -312,6 +370,58 @@ export default function Home() {
               </div>
             </div>
           )}
+
+          {/* Quick Mood Selector */}
+          <div className={loaded ? 'w-full mb-6 transition-all duration-700 delay-175 opacity-100 translate-y-0' : 'w-full mb-6 transition-all duration-700 delay-175 opacity-0 translate-y-4'}>
+            <p className="text-center text-[10px] font-semibold mb-2 tracking-widest" style={{ color: '#f59e0b44' }}>HIZLI ÖNERİ</p>
+            <div className="flex justify-center gap-2">
+              {[
+                { label: 'Neşeli', emoji: '☀️', value: 'Neşeli' },
+                { label: 'Sakin', emoji: '😌', value: 'Sakin' },
+                { label: 'Duygusal', emoji: '😢', value: 'Duygusal' },
+                { label: 'Heyecanlı', emoji: '🔥', value: 'Heyecanlı' },
+              ].map(m => (
+                <button
+                  key={m.value}
+                  onClick={() => handleMoodSelect(m.value)}
+                  disabled={moodLoading}
+                  className="flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl border transition-all btn-press"
+                  style={{
+                    background: selectedMood === m.value ? '#f59e0b22' : '#12121a',
+                    borderColor: selectedMood === m.value ? '#f59e0b66' : 'rgba(255,255,255,0.06)',
+                    opacity: moodLoading && selectedMood !== m.value ? 0.5 : 1,
+                  }}
+                >
+                  <span style={{ fontSize: '20px' }}>{m.emoji}</span>
+                  <span className="text-[9px] font-medium" style={{ color: selectedMood === m.value ? '#f59e0b' : '#64748b' }}>{m.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {moodLoading && (
+              <div className="flex justify-center mt-3">
+                <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: '2px solid #f59e0b33', borderTopColor: '#f59e0b', animation: 'spin 0.8s linear infinite' }} />
+              </div>
+            )}
+
+            {moodResult && !moodLoading && (
+              <button
+                onClick={handleMoodResultClick}
+                className="w-full mt-3 rounded-xl p-3 border text-left transition-all hover:scale-[1.01] active:scale-[0.99]"
+                style={{ background: '#12121a', borderColor: '#f59e0b33' }}
+              >
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <p className="text-sm font-semibold leading-tight" style={{ color: '#f1f5f9' }}>{moodResult.turkish_title || moodResult.title}</p>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded flex-shrink-0 font-semibold" style={{ background: moodResult.type === 'film' ? '#f59e0b22' : '#3b82f622', color: moodResult.type === 'film' ? '#f59e0b' : '#60a5fa' }}>
+                    {moodResult.type === 'film' ? 'Film' : 'Dizi'}
+                  </span>
+                </div>
+                <p className="text-[10px] mb-1" style={{ color: '#475569' }}>{moodResult.year} • ⭐ {moodResult.imdb}</p>
+                <p className="text-[10px] leading-relaxed line-clamp-2" style={{ color: '#94a3b8' }}>{moodResult.reason}</p>
+                <p className="text-[10px] mt-1.5 font-medium" style={{ color: '#f59e0b88' }}>Detayları gör →</p>
+              </button>
+            )}
+          </div>
 
           <div className={loaded ? 'text-center mb-8 transition-all duration-700 delay-200 opacity-100 translate-y-0' : 'text-center mb-8 transition-all duration-700 delay-200 opacity-0 translate-y-4'}>
             <Link href="/quiz"><button className="px-14 py-5 rounded-full text-xl font-semibold transition-all hover:scale-105 active:scale-95" style={{ background: '#f59e0b', color: '#0a0a0f' }}>Başla →</button></Link>
