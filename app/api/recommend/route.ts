@@ -14,10 +14,9 @@ Yanıtını SADECE aşağıdaki JSON formatında ver, başka hiçbir şey yazma,
 - Reason alanı filmi/diziyi satmalı, kullanıcıyı izlemeye ikna etmeli
 - Gerçek var olan yapıtlar öner, uydurma
 - Çeşitlilik sağla — en az 2 öneri az bilinen/niş yapım olsun
-- Kullanıcının platform tercihine dikkat et
+- Kullanıcının platform ve dönem tercihine dikkat et
+- İzleme arkadaşı "Aileyle" ise aile dostu yapımlar öner (şiddet/yetişkin içerik yok)
 - HER SEFERINDE FARKLI yapıtlar öner
-- Dil tercihi "Yabancı (Dublajlı)" ise Türkçe dublajı olan yapımlar öner
-- Dil tercihi "Yabancı (Altyazılı)" ise yabancı yapımlar öner
 - "Fark etmez" seçenekleri kısıtlama yok demek`
   for (let i = 0; i <= retries; i++) {
     try {
@@ -55,13 +54,19 @@ export async function POST(req: NextRequest) {
       reverseMode = false,
     } = await req.json()
 
+    const isFamily = answers.company === 'Aileyle'
+    const familyNote = isFamily
+      ? '\n\nAİLE İLE İZLENECEK: Cinsel içerik, çıplaklık, ağır küfür ve aşırı şiddet içeren yapımlar ÖNERİLMESİN. Aile dostu, 13+ veya herkes için uygun yapımlar öner.'
+      : ''
+
     let userMessage = `Kullanıcının cevapları:
 - Ruh hali: ${answers.mood || 'belirtilmedi'}
+- Dönem tercihi: ${answers.era || 'Fark etmez'}
 - İstediği deneyim: ${answers.style || 'belirtilmedi'}
 - Final tercihi: ${answers.ending || 'belirtilmedi'}
-- Dil tercihi: ${answers.language || 'Fark etmez'}
+- İzleme arkadaşı: ${answers.company || 'Yalnız'}
 - Platformlar: ${Array.isArray(answers.platform) ? answers.platform.join(', ') : (answers.platform || 'Fark etmez')}
-- Favori türler: ${Array.isArray(answers.genres) ? answers.genres.join(', ') : (answers.genres || 'belirtilmedi')}`
+- Favori türler: ${Array.isArray(answers.genres) ? answers.genres.join(', ') : (answers.genres || 'belirtilmedi')}${familyNote}`
 
     if (excludeTitles.length > 0) {
       userMessage += `\n\nDaha önce izlenen ve ÖNERİLMEMESİ gereken yapımlar: ${excludeTitles.join(', ')}`

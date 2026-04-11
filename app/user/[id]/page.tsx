@@ -50,6 +50,13 @@ export default function UserProfilePage() {
   const [followLoading, setFollowLoading] = useState(false)
   const [followerCount, setFollowerCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
+  const [theyFollowMe, setTheyFollowMe] = useState(false) // mutual follow check
+
+  // Message state
+  const [msgModalOpen, setMsgModalOpen] = useState(false)
+  const [msgText, setMsgText] = useState('')
+  const [msgSending, setMsgSending] = useState(false)
+  const [msgSent, setMsgSent] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -61,7 +68,6 @@ export default function UserProfilePage() {
       supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', id),
       supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', id),
     ]).then(([profileRes, pointsRes, actorsRes, wlRes, followersRes, followingRes]) => {
-      // Profile might not exist yet for new users — fall back gracefully
       if (!profileRes.data && !pointsRes.data) {
         setNotFound(true)
         setLoading(false)
@@ -90,6 +96,13 @@ export default function UserProfilePage() {
       .eq('following_id', id)
       .maybeSingle()
       .then(({ data }) => { if (data) setFollowing(true) })
+    // Check if they follow me (for mutual follow / messaging)
+    supabase.from('follows')
+      .select('id')
+      .eq('follower_id', id)
+      .eq('following_id', currentUser.id)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setTheyFollowMe(true) })
   }, [currentUser, id])
 
   const handleFollowToggle = async () => {
@@ -105,6 +118,20 @@ export default function UserProfilePage() {
       setFollowerCount(c => c + 1)
     }
     setFollowLoading(false)
+  }
+
+  const handleSendMessage = async () => {
+    if (!currentUser || !msgText.trim() || msgSending) return
+    setMsgSending(true)
+    await supabase.from('messages').insert({
+      sender_id: currentUser.id,
+      receiver_id: id,
+      content: msgText.trim(),
+    })
+    setMsgSent(true)
+    setMsgText('')
+    setMsgSending(false)
+    setTimeout(() => { setMsgModalOpen(false); setMsgSent(false) }, 1500)
   }
 
   if (loading) {
@@ -131,6 +158,7 @@ export default function UserProfilePage() {
   const displayName = profile.nickname || 'Anonim'
   const badge = points?.badge || 'Yeni Üye'
   const badgeEmoji = BADGE_EMOJIS[badge] || '🌱'
+  const isMutualFollow = following && theyFollowMe
 
   return (
     <main className="min-h-screen pt-10 pb-24 px-6" style={{ background: '#0a0a0f' }}>
@@ -141,6 +169,40 @@ export default function UserProfilePage() {
           personProfile={selectedActor.profile_path ? `https://image.tmdb.org/t/p/w185${selectedActor.profile_path}` : null}
           onClose={() => setSelectedActor(null)}
         />
+      )}
+
+      {/* Mesaj Modal */}
+      {msgModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: '#000000cc' }} onClick={() => setMsgModalOpen(false)}>
+          <div className="w-full max-w-sm rounded-2xl p-5 border popup-enter" style={{ background: '#12121a', borderColor: '#ffffff15' }} onClick={e => e.stopPropagation()}>
+            {msgSent ? (
+              <div className="text-center py-4">
+                <div className="text-4xl mb-2">✉️</div>
+                <p className="font-semibold" style={{ color: '#22c55e' }}>Mesaj gönderildi!</p>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-base font-bold mb-1" style={{ color: '#f1f5f9' }}>@{displayName}'e Mesaj Gönder</h3>
+                <p className="text-xs mb-4" style={{ color: '#64748b' }}>Mesajın sadece siz ikiniz görebilirsiniz.</p>
+                <textarea
+                  value={msgText}
+                  onChange={e => setMsgText(e.target.value)}
+                  placeholder="Mesajınızı yazın..."
+                  rows={3}
+                  autoFocus
+                  className="w-full rounded-xl px-3 py-2.5 text-sm resize-none outline-none mb-3"
+                  style={{ background: '#0f172a', color: '#f1f5f9', border: '1px solid rgba(255,255,255,0.08)' }}
+                />
+                <div className="flex gap-2">
+                  <button onClick={() => setMsgModalOpen(false)} className="flex-1 py-2.5 rounded-xl text-sm font-medium border" style={{ background: 'transparent', color: '#94a3b8', borderColor: '#ffffff15' }}>İptal</button>
+                  <button onClick={handleSendMessage} disabled={!msgText.trim() || msgSending} className="flex-1 py-2.5 rounded-xl text-sm font-semibold" style={{ background: '#f59e0b', color: '#0a0a0f', opacity: (!msgText.trim() || msgSending) ? 0.6 : 1 }}>
+                    {msgSending ? '...' : 'Gönder'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
 
       <div className="max-w-md mx-auto">
@@ -176,19 +238,30 @@ export default function UserProfilePage() {
           </div>
 
           {!isOwnProfile && currentUser && (
-            <button
-              onClick={handleFollowToggle}
-              disabled={followLoading}
-              className="mt-4 px-5 py-2 rounded-full text-sm font-semibold transition-all btn-press"
-              style={{
-                background: following ? '#f59e0b22' : '#f59e0b',
-                color: following ? '#f59e0b' : '#0a0a0f',
-                border: following ? '1px solid #f59e0b44' : 'none',
-                opacity: followLoading ? 0.7 : 1,
-              }}
-            >
-              {following ? '✓ Takip Ediliyor' : '+ Takip Et'}
-            </button>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={handleFollowToggle}
+                disabled={followLoading}
+                className="px-5 py-2 rounded-full text-sm font-semibold transition-all btn-press"
+                style={{
+                  background: 'transparent',
+                  color: following ? '#ef4444' : '#f59e0b',
+                  border: following ? '1px solid #ef444466' : '1px solid #f59e0b',
+                  opacity: followLoading ? 0.7 : 1,
+                }}
+              >
+                {following ? '✕ Takipten Çık' : '+ Takip Et'}
+              </button>
+              {isMutualFollow && (
+                <button
+                  onClick={() => setMsgModalOpen(true)}
+                  className="px-4 py-2 rounded-full text-sm font-semibold btn-press"
+                  style={{ background: '#3b82f622', color: '#60a5fa', border: '1px solid #3b82f644' }}
+                >
+                  ✉️ Mesaj At
+                </button>
+              )}
+            </div>
           )}
           {isOwnProfile && (
             <button onClick={() => router.push('/profile')} className="mt-4 px-5 py-2 rounded-full text-sm font-medium btn-press" style={{ background: '#12121a', color: '#94a3b8', border: '1px solid #ffffff15' }}>

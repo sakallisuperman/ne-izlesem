@@ -8,7 +8,7 @@ import type { FilmNavItem } from '@/components/PersonPopup'
 import { formatDateTR } from '@/lib/utils'
 import { fetchCached } from '@/lib/tmdbCache'
 import { moderateComment } from '@/lib/moderation'
-import ReviewAfterWatchModal from '@/components/ReviewAfterWatchModal'
+import WatchedReviewModal from '@/components/WatchedReviewModal'
 
 interface CastMember {
   id: number
@@ -43,6 +43,7 @@ interface Review {
   rating: number
   comment: string | null
   created_at: string
+  parent_id: string | null
 }
 
 interface NavItem {
@@ -130,6 +131,12 @@ export default function MovieDetailPopup({
   const [badgesMap, setBadgesMap] = useState<Record<string, string>>({})
   const [reminderOpen, setReminderOpen] = useState(false)
   const [reminded, setReminded] = useState(false)
+
+  // Reply states
+  const [replyingTo, setReplyingTo] = useState<string | null>(null)
+  const [replyText, setReplyText] = useState('')
+  const [replySubmitting, setReplySubmitting] = useState(false)
+  const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set())
 
   // Watchlist
   const [watchlistStatus, setWatchlistStatus] = useState<null | 'saved' | 'watched'>(null)
@@ -229,7 +236,7 @@ export default function MovieDetailPopup({
     setMyLikes(new Set())
     supabase
       .from('reviews')
-      .select('id, user_id, user_name, rating, comment, created_at')
+      .select('id, user_id, user_name, rating, comment, created_at, parent_id')
       .eq('movie_title', reviewKey)
       .order('created_at', { ascending: false })
       .then(async ({ data }) => {
@@ -352,6 +359,7 @@ export default function MovieDetailPopup({
         rating: myRating,
         comment: myComment.trim() || null,
         created_at: new Date().toISOString(),
+        parent_id: null,
       }
       setReviews(prev => [newReview, ...prev])
       const { data: myPts } = await supabase.from('user_points').select('badge').eq('user_id', user.id).maybeSingle()
@@ -366,6 +374,34 @@ export default function MovieDetailPopup({
   const handleDeleteReview = async (id: string) => {
     await supabase.from('reviews').delete().eq('id', id)
     setReviews(prev => prev.filter(r => r.id !== id))
+  }
+
+  const handleSubmitReply = async (parentId: string) => {
+    if (!user || !replyText.trim() || replySubmitting) return
+    setReplySubmitting(true)
+    const modResult = (await import('@/lib/moderation')).moderateComment(replyText)
+    if (!modResult.approved) { setReplySubmitting(false); return }
+    let userName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Kullanıcı'
+    try {
+      const { data: pd } = await supabase.from('profiles').select('nickname').eq('id', user.id).maybeSingle()
+      if (pd?.nickname) userName = pd.nickname
+    } catch {}
+    const { data, error } = await supabase.from('reviews').insert({
+      user_id: user.id,
+      user_name: userName,
+      movie_title: reviewKey,
+      movie_type: contentType || (currentMediaType === 'movie' ? 'film' : 'dizi'),
+      rating: 5,
+      comment: replyText.trim(),
+      parent_id: parentId,
+    }).select('id, user_id, user_name, rating, comment, created_at, parent_id').single()
+    if (!error && data) {
+      setReviews(prev => [...prev, data as Review])
+      setExpandedReplies(prev => new Set(Array.from(prev).concat(parentId)))
+    }
+    setReplyText('')
+    setReplyingTo(null)
+    setReplySubmitting(false)
   }
 
   const handleToggleLike = async (reviewId: string) => {
@@ -480,7 +516,7 @@ export default function MovieDetailPopup({
       <div
         className="fixed inset-0 flex items-center justify-center px-4"
         style={{ background: '#000000cc', zIndex }}
-        onClick={actorPopup ? undefined : onClose}
+        onClick={actorPopup || directorPopup || reviewModalOpen ? undefined : onClose}
       >
         <div
           className="w-full max-w-md rounded-2xl overflow-hidden relative popup-enter"
@@ -854,52 +890,145 @@ export default function MovieDetailPopup({
                     ))}
                   </div>
                 </div>
-              ) : reviews.filter(r => r.user_id !== user?.id).length === 0 ? (
-                <p className="text-xs text-center py-3" style={{ color: '#475569' }}>
-                  {reviews.length === 0 ? 'Henüz yorum yok. İlk yorumu sen yap!' : ''}
-                </p>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {[...reviews.filter(r => r.user_id !== user?.id)]
-                    .sort((a, b) => reviewSort === 'liked'
-                      ? (likesMap[b.id] || 0) - (likesMap[a.id] || 0)
-                      : new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-                    )
-                    .map(review => (
-                    <div key={review.id} className="rounded-xl p-3" style={{ background: '#0f172a' }}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: '#f59e0b22', color: '#f59e0b' }}>
-                            {review.user_name.charAt(0).toUpperCase()}
+              ) : (() => {
+                const topLevel = reviews.filter(r => !r.parent_id && r.user_id !== user?.id)
+                const repliesMap = reviews.reduce<Record<string, Review[]>>((acc, r) => {
+                  if (r.parent_id) { if (!acc[r.parent_id]) acc[r.parent_id] = []; acc[r.parent_id].push(r) }
+                  return acc
+                }, {})
+                if (topLevel.length === 0) return (
+                  <p className="text-xs text-center py-3" style={{ color: '#475569' }}>
+                    {reviews.filter(r => !r.parent_id).length === 0 ? 'Henüz yorum yok. İlk yorumu sen yap!' : ''}
+                  </p>
+                )
+                return (
+                  <div className="flex flex-col gap-3">
+                    {[...topLevel]
+                      .sort((a, b) => reviewSort === 'liked'
+                        ? (likesMap[b.id] || 0) - (likesMap[a.id] || 0)
+                        : new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                      )
+                      .map(review => {
+                        const reviewReplies = repliesMap[review.id] || []
+                        const isExpanded = expandedReplies.has(review.id)
+                        return (
+                          <div key={review.id} className="rounded-xl p-3" style={{ background: '#0f172a' }}>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: '#f59e0b22', color: '#f59e0b' }}>
+                                  {review.user_name.charAt(0).toUpperCase()}
+                                </div>
+                                <a href={`/user/${review.user_id}`} onClick={e => e.stopPropagation()} className="text-xs font-medium hover:underline" style={{ color: '#cbd5e1', textDecoration: 'none' }}>{review.user_name.split(' ')[0]}</a>
+                                {badgesMap[review.user_id] && (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: '#f59e0b15', color: '#f59e0b' }} title={badgesMap[review.user_id]}>
+                                    {BADGE_EMOJIS[badgesMap[review.user_id]] || ''} {badgesMap[review.user_id]}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold" style={{ color: '#f59e0b' }}>{review.rating.toFixed(1)}/10</span>
+                                <span className="text-[10px]" style={{ color: '#475569' }}>{relativeTime(review.created_at)}</span>
+                              </div>
+                            </div>
+                            {review.comment && (
+                              <p className="text-xs leading-relaxed mb-2" style={{ color: '#94a3b8' }}>{review.comment}</p>
+                            )}
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => handleToggleLike(review.id)}
+                                disabled={!user || likingId === review.id}
+                                className="flex items-center gap-1 transition-all"
+                                style={{ background: 'none', border: 'none', cursor: user ? 'pointer' : 'default', padding: 0 }}
+                              >
+                                <span style={{ fontSize: '12px', opacity: likingId === review.id ? 0.5 : 1 }}>{myLikes.has(review.id) ? '❤️' : '🤍'}</span>
+                                <span className="text-[10px]" style={{ color: myLikes.has(review.id) ? '#f43f5e' : '#475569' }}>{likesMap[review.id] || 0}</span>
+                              </button>
+                              {user && (
+                                <button
+                                  onClick={() => { setReplyingTo(replyingTo === review.id ? null : review.id); setReplyText('') }}
+                                  className="text-[10px] transition-all"
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: replyingTo === review.id ? '#f59e0b' : '#475569', padding: 0 }}
+                                >
+                                  ↩ Yanıtla
+                                </button>
+                              )}
+                              {reviewReplies.length > 0 && (
+                                <button
+                                  onClick={() => setExpandedReplies(prev => {
+                                    const s = new Set(Array.from(prev))
+                                    if (s.has(review.id)) s.delete(review.id); else s.add(review.id)
+                                    return s
+                                  })}
+                                  className="text-[10px] transition-all"
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 0 }}
+                                >
+                                  {isExpanded ? '▲ Yanıtları gizle' : `▼ ${reviewReplies.length} yanıt göster`}
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Reply textarea */}
+                            {replyingTo === review.id && (
+                              <div className="mt-2 pl-4 border-l" style={{ borderColor: '#f59e0b44' }}>
+                                <textarea
+                                  value={replyText}
+                                  onChange={e => setReplyText(e.target.value)}
+                                  placeholder="Yanıtınızı yazın..."
+                                  rows={2}
+                                  autoFocus
+                                  className="w-full rounded-xl px-3 py-2 text-xs resize-none outline-none mb-1.5"
+                                  style={{ background: '#0a0a0f', color: '#f1f5f9', border: '1px solid rgba(255,255,255,0.08)' }}
+                                />
+                                <div className="flex gap-1.5">
+                                  <button
+                                    onClick={() => { setReplyingTo(null); setReplyText('') }}
+                                    className="text-[10px] px-2.5 py-1 rounded-full"
+                                    style={{ background: '#ffffff10', color: '#64748b' }}
+                                  >İptal</button>
+                                  <button
+                                    onClick={() => handleSubmitReply(review.id)}
+                                    disabled={!replyText.trim() || replySubmitting}
+                                    className="text-[10px] px-2.5 py-1 rounded-full font-semibold"
+                                    style={{ background: '#f59e0b', color: '#0a0a0f', opacity: (!replyText.trim() || replySubmitting) ? 0.5 : 1 }}
+                                  >{replySubmitting ? '...' : 'Gönder'}</button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Nested replies */}
+                            {isExpanded && reviewReplies.length > 0 && (
+                              <div className="mt-2 flex flex-col gap-2 pl-4 border-l" style={{ borderColor: '#ffffff10' }}>
+                                {reviewReplies
+                                  .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                                  .map(reply => (
+                                  <div key={reply.id} className="rounded-lg p-2.5" style={{ background: '#0a0a0f' }}>
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0" style={{ background: '#7F77DD22', color: '#7F77DD' }}>
+                                        {reply.user_name.charAt(0).toUpperCase()}
+                                      </div>
+                                      <a href={`/user/${reply.user_id}`} onClick={e => e.stopPropagation()} className="text-[10px] font-medium hover:underline" style={{ color: '#cbd5e1', textDecoration: 'none' }}>{reply.user_name.split(' ')[0]}</a>
+                                      <span className="text-[9px]" style={{ color: '#334155' }}>{relativeTime(reply.created_at)}</span>
+                                    </div>
+                                    {reply.comment && <p className="text-[11px] leading-relaxed mb-1.5" style={{ color: '#94a3b8' }}>{reply.comment}</p>}
+                                    <button
+                                      onClick={() => handleToggleLike(reply.id)}
+                                      disabled={!user || likingId === reply.id}
+                                      className="flex items-center gap-1"
+                                      style={{ background: 'none', border: 'none', cursor: user ? 'pointer' : 'default', padding: 0 }}
+                                    >
+                                      <span style={{ fontSize: '11px', opacity: likingId === reply.id ? 0.5 : 1 }}>{myLikes.has(reply.id) ? '❤️' : '🤍'}</span>
+                                      <span className="text-[9px]" style={{ color: myLikes.has(reply.id) ? '#f43f5e' : '#475569' }}>{likesMap[reply.id] || 0}</span>
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <a href={`/user/${review.user_id}`} onClick={e => e.stopPropagation()} className="text-xs font-medium hover:underline" style={{ color: '#cbd5e1', textDecoration: 'none' }}>{review.user_name.split(' ')[0]}</a>
-                          {badgesMap[review.user_id] && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: '#f59e0b15', color: '#f59e0b' }} title={badgesMap[review.user_id]}>
-                              {BADGE_EMOJIS[badgesMap[review.user_id]] || ''} {badgesMap[review.user_id]}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold" style={{ color: '#f59e0b' }}>{review.rating.toFixed(1)}/10</span>
-                          <span className="text-[10px]" style={{ color: '#475569' }}>{relativeTime(review.created_at)}</span>
-                        </div>
-                      </div>
-                      {review.comment && (
-                        <p className="text-xs leading-relaxed mb-2" style={{ color: '#94a3b8' }}>{review.comment}</p>
-                      )}
-                      <button
-                        onClick={() => handleToggleLike(review.id)}
-                        disabled={!user || likingId === review.id}
-                        className="flex items-center gap-1 transition-all"
-                        style={{ background: 'none', border: 'none', cursor: user ? 'pointer' : 'default', padding: 0 }}
-                      >
-                        <span style={{ fontSize: '12px', opacity: likingId === review.id ? 0.5 : 1 }}>{myLikes.has(review.id) ? '❤️' : '🤍'}</span>
-                        <span className="text-[10px]" style={{ color: myLikes.has(review.id) ? '#f43f5e' : '#475569' }}>{likesMap[review.id] || 0}</span>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+                        )
+                      })}
+                  </div>
+                )
+              })()}
             </div>
           </div>
         </div>
@@ -957,11 +1086,25 @@ export default function MovieDetailPopup({
 
       {/* İzledim sonrası yorum popup — z-[70] */}
       {reviewModalOpen && (
-        <ReviewAfterWatchModal
+        <WatchedReviewModal
           title={currentTitle}
           originalTitle={currentOriginalTitle}
           mediaType={currentMediaType}
           onClose={() => setReviewModalOpen(false)}
+          onSubmitted={({ rating, comment }) => {
+            const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Kullanıcı'
+            const newReview: Review = {
+              id: crypto.randomUUID(),
+              user_id: user!.id,
+              user_name: userName,
+              rating,
+              comment,
+              created_at: new Date().toISOString(),
+              parent_id: null,
+            }
+            setReviews(prev => [newReview, ...prev])
+          }}
+          zIndex={zIndex + 20}
         />
       )}
     </>

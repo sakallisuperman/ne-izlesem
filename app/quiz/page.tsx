@@ -6,11 +6,12 @@ import { supabase } from '@/lib/supabase'
 
 const questions = [
   { id: 'mood',     text: 'Şu an kendini nasıl hissediyorsun?',     type: 'single', options: ['Neşeli', 'Heyecanlı', 'Meraklı', 'Sakin', 'Duygusal', 'Yorgun', 'Canı sıkkın', 'Stresli'] },
+  { id: 'era',      text: 'Hangi dönemden olsun?',                   type: 'single', options: ['2000 öncesi', '2000-2010', '2010-2020', '2020 sonrası', 'Fark etmez'] },
   { id: 'style',    text: 'Nasıl bir deneyim arıyorsun?',            type: 'single', options: ['Kafamı dağıtmak istiyorum', 'Kendimi kaptırmak istiyorum', 'Düşünmek istiyorum', 'Heyecan yaşamak istiyorum', 'Gülmek istiyorum', 'Ağlamak istiyorum'] },
   { id: 'ending',   text: 'Nasıl bir final olsun?',                  type: 'single', options: ['Mutlu son', 'Açık uçlu', 'Ters köşe', 'Hüzünlü ama güzel', 'Fark etmez'] },
-  { id: 'language', text: 'Dil tercihin?',                           type: 'single', options: ['Türkçe yapım', 'Yabancı (Altyazılı)', 'Yabancı (Dublajlı)', 'Fark etmez'] },
+  { id: 'company',  text: 'Kimlerle izliyorsun?',                    type: 'single', options: ['Yalnız', 'Sevgilimle', 'Arkadaşlarla', 'Aileyle'] },
   { id: 'platform', text: 'Hangi platformları kullanıyorsun?',       type: 'multi',  maxSelect: 4, options: ['Netflix', 'Amazon Prime', 'Disney+', 'BluTV', 'MUBI', 'Exxen', 'Gain', 'HBO Max', 'Tabii', 'Fark etmez'] },
-  { id: 'genres',   text: 'Favori türlerin? (En fazla 3)',           type: 'multi',  maxSelect: 3, options: ['Aksiyon', 'Macera', 'Komedi', 'Dram', 'Korku', 'Bilim Kurgu', 'Fantastik', 'Gerilim', 'Suç', 'Romantik', 'Animasyon', 'Belgesel', 'Savaş', 'Tarih', 'Müzikal', 'Gizem'] },
+  { id: 'genres',   text: 'Favori türlerin? (En fazla 3)',           type: 'multi',  maxSelect: 3, options: ['Aksiyon', 'Macera', 'Komedi', 'Dram', 'Korku', 'Bilim Kurgu', 'Fantastik', 'Gerilim', 'Suç', 'Romantik', 'Animasyon', 'Belgesel'] },
 ]
 
 const PLATFORM_QUESTION_INDEX = questions.findIndex(q => q.id === 'platform')
